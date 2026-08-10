@@ -32,7 +32,7 @@
     "events": "^3.3.0",
     "fft.js": "^4.0.4",
     "lodash.debounce": "^4.0.8",
-    "pcm-ringbuf-player": "github:f-io/pcm-ringbuf-player",
+    "pcm-ringbuf-player": "github:gozmanyoni/pcm-ringbuf-player",
     "react-router-dom": "^7.8.1",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
