@@ -129,22 +129,7 @@ function App() {
             </div>
           </div>
 
-          {/* Velocità in alto */}
-          <div
-            style={{
-              position: "absolute",
-              top: "3%",
-              left: "50%",
-              transform: "translateX(-50%)",
-              fontSize: "72px",
-              fontWeight: "bold",
-              color: "white",
-              textShadow: "0 0 10px rgba(0,0,0,0.7)",
-            }}
-          >
-            000
-            <span style={{ fontSize: "28px", marginLeft: "8px" }}>km/h</span>
-          </div>
+
         </div>
       </div>
     </Router>
