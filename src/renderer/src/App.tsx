@@ -22,7 +22,9 @@ const style = {
   display: "flex"
 };
 
+
 function App() {
+  const [time, setTime] = useState(new Date());
   const [receivingVideo, setReceivingVideo] = useState(false);
   const [commandCounter, setCommandCounter] = useState(0);
   const [keyCommand, setKeyCommand] = useState('');
@@ -60,6 +62,14 @@ function App() {
   };
 
   useEffect(() => {
+    const timer = setInterval(() => {
+      setTime(new Date());
+    }, 30000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     if (!settings) return;
 
     updateCameras(setCameraFound, saveSettings, settings);
@@ -75,65 +85,88 @@ function App() {
   }, [settings]);
 
   return (
-    <Router>
-      {/* Schermo intero (kiosk) */}
+  <Router>
+    {/* Schermo intero (kiosk) */}
+    <div
+      className="w-screen h-screen flex items-center justify-center bg-black"
+      style={{ touchAction: 'none' }}
+    >
+      {/* Outer round display */}
       <div
-        className="w-screen h-screen flex items-center justify-center bg-black"
-        style={{ touchAction: 'none' }}
+        className="relative flex items-center justify-center"
+        style={{
+          width: "min(100vw, 100vh)",
+          height: "min(100vw, 100vh)",
+          borderRadius: "50%",
+          overflow: "hidden",
+          backgroundColor: "black",
+          border: "0px solid red"
+        }}
       >
-        {/* Quadrato 800x800 centrato */}
+
+        {/* Inner CarPlay square */}
         <div
-          className="relative flex items-center justify-center"
+          className="bg-black flex items-center justify-center"
           style={{
-            width: "min(100vw, 100vh)",
-            height: "min(100vw, 100vh)",
-            borderRadius: "50%",
-            overflow: "hidden",
-            backgroundColor: "black",
-            border: "0px solid red" // DEBUG: bordo cerchio esterno
+            width: "69%",
+            height: "69%",
+            transform: "translate(22%, 22%)",
+            border: "0px solid lime"
           }}
         >
+          <div className="w-full h-full flex items-center justify-center">
+            <Nav receivingVideo={receivingVideo} settings={settings} />
 
-          {/* Quadrato 550x550 con tutta l'app centrata */}
-          <div
-            className="bg-black flex items-center justify-center"
-            style={{
-              width: "69%",
-              height: "69%",
-              transform: "translate(22%, 22%)",
-              border: "0px solid lime" // DEBUG: bordo quadrato interno
-            }}
-          >
-            <div className="w-full h-full flex items-center justify-center">
-              <Nav receivingVideo={receivingVideo} settings={settings} />
-              {settings && (
-                <Carplay
-                  receivingVideo={receivingVideo}
-                  setReceivingVideo={setReceivingVideo}
-                  settings={settings}
-                  command={keyCommand as KeyCommand}
-                  commandCounter={commandCounter}
-                />
-              )}
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/settings" element={<Settings settings={settings!} />} />
-                <Route path="/info" element={<Info />} />
-                <Route path="/camera" element={<Camera settings={settings!} />} />
-              </Routes>
-              <Modal open={reverse} onClick={() => setReverse(false)}>
-                <Box sx={style}>
-                  <Camera settings={settings} />
-                </Box>
-              </Modal>
-            </div>
+            {settings && (
+              <Carplay
+                receivingVideo={receivingVideo}
+                setReceivingVideo={setReceivingVideo}
+                settings={settings}
+                command={keyCommand as KeyCommand}
+                commandCounter={commandCounter}
+              />
+            )}
+
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/settings" element={<Settings settings={settings!} />} />
+              <Route path="/info" element={<Info />} />
+              <Route path="/camera" element={<Camera settings={settings!} />} />
+            </Routes>
+
+            <Modal open={reverse} onClick={() => setReverse(false)}>
+              <Box sx={style}>
+                <Camera settings={settings} />
+              </Box>
+            </Modal>
           </div>
-
-
         </div>
+
+        {/* Clock in outer ring */}
+        <div
+          style={{
+            position: "absolute",
+            top: "4%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            fontSize: "20px",
+            fontWeight: 500,
+            color: "white",
+            textShadow: "0 0 6px rgba(0,0,0,0.7)",
+            zIndex: 10,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {time.toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </div>
+
       </div>
-    </Router>
-  );
+    </div>
+  </Router>
+);
 }
 
 export default App;
