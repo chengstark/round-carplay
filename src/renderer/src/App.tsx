@@ -38,6 +38,15 @@ const FILLER_MARGIN_PCT = 1.6;
 const FILLER_TOP_PCT = SQUARE_BOTTOM_PCT + FILLER_MARGIN_PCT;
 const FILLER_HEIGHT_PCT = 98.6 - FILLER_TOP_PCT;
 
+// SCfiller.png is a square canvas and the car does not fill it: the opaque pixels run
+// from 10.7% to 78.7% of the image height. Scale and offset the <img> by those fractions
+// so the *car* lands in the band above, instead of the padded canvas. Re-measure these
+// two numbers if the artwork is ever replaced with a differently padded one.
+const ART_TOP_FRACTION = 0.107;
+const ART_HEIGHT_FRACTION = 0.68;
+const FILLER_IMG_HEIGHT_PCT = FILLER_HEIGHT_PCT / ART_HEIGHT_FRACTION;
+const FILLER_IMG_TOP_PCT = FILLER_TOP_PCT - FILLER_IMG_HEIGHT_PCT * ART_TOP_FRACTION;
+
 
 function App() {
   const [time, setTime] = useState(new Date());
@@ -166,8 +175,8 @@ function App() {
           draggable={false}
           style={{
             position: "absolute",
-            top: `${FILLER_TOP_PCT}%`,
-            height: `${FILLER_HEIGHT_PCT}%`,
+            top: `${FILLER_IMG_TOP_PCT}%`,
+            height: `${FILLER_IMG_HEIGHT_PCT}%`,
             left: "50%",
             transform: "translateX(-50%)",
             width: "68%",
