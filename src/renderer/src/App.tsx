@@ -22,6 +22,22 @@ const style = {
   display: "flex"
 };
 
+const BACKGROUND = 'rgb(160, 186, 204)';
+
+// The CarPlay square is a plain block in the circle's top-left corner, nudged into the
+// middle by translate(22%, 22%) — 22% of its own 69% size. Its bottom edge therefore
+// sits at 69 * 1.22 = 84.18% of the circle's diameter. Keep the circle a block element:
+// giving it display:flex would centre the square first and the translate would then
+// shove it out of the circle.
+const SQUARE_SIZE_PCT = 69;
+const SQUARE_SHIFT_PCT = 22;
+const SQUARE_BOTTOM_PCT = SQUARE_SIZE_PCT * (1 + SQUARE_SHIFT_PCT / 100);
+
+// Filler artwork in the ring below the square, with a margin between the two.
+const FILLER_MARGIN_PCT = 1.6;
+const FILLER_TOP_PCT = SQUARE_BOTTOM_PCT + FILLER_MARGIN_PCT;
+const FILLER_HEIGHT_PCT = 98.6 - FILLER_TOP_PCT;
+
 
 function App() {
   const [time, setTime] = useState(new Date());
@@ -88,29 +104,30 @@ function App() {
   <Router>
     {/* Schermo intero (kiosk) */}
     <div
-      className="w-screen h-screen flex items-center justify-center bg-black"
-      style={{ touchAction: 'none' }}
+      className="w-screen h-screen flex items-center justify-center"
+      style={{ touchAction: 'none', backgroundColor: BACKGROUND }}
     >
       {/* Outer round display */}
       <div
         className="relative flex items-center justify-center"
         style={{
+          position: "relative",
           width: "min(100vw, 100vh)",
           height: "min(100vw, 100vh)",
           borderRadius: "50%",
           overflow: "hidden",
-          backgroundColor: "black",
+          backgroundColor: BACKGROUND,
           border: "0px solid red"
         }}
       >
 
         {/* Inner CarPlay square */}
         <div
-          className="bg-black flex items-center justify-center"
+          className="flex items-center justify-center"
           style={{
-            width: "69%",
-            height: "69%",
-            transform: "translate(22%, 22%)",
+            width: `${SQUARE_SIZE_PCT}%`,
+            height: `${SQUARE_SIZE_PCT}%`,
+            transform: `translate(${SQUARE_SHIFT_PCT}%, ${SQUARE_SHIFT_PCT}%)`,
             border: "0px solid lime"
           }}
         >
@@ -142,6 +159,24 @@ function App() {
           </div>
         </div>
 
+        {/* Filler artwork in the ring below the CarPlay square */}
+        <img
+          src="SCfiller.png"
+          alt=""
+          draggable={false}
+          style={{
+            position: "absolute",
+            top: `${FILLER_TOP_PCT}%`,
+            height: `${FILLER_HEIGHT_PCT}%`,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: "68%",
+            objectFit: "contain",
+            pointerEvents: "none",
+            userSelect: "none"
+          }}
+        />
+
         {/* Clock in outer ring */}
         <div
           style={{
@@ -149,7 +184,7 @@ function App() {
             top: "4%",
             left: "50%",
             transform: "translateX(-50%)",
-            fontSize: "20px",
+            fontSize: "min(6vw, 6vh)",
             fontWeight: 500,
             color: "white",
             textShadow: "0 0 6px rgba(0,0,0,0.7)",
