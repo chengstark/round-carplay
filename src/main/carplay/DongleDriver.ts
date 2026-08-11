@@ -49,7 +49,7 @@ export const DEFAULT_CONFIG: DongleConfig = {
   width: 480,
   height: 480,
   fps: 60,
-  dpi: 100,
+  dpi: 160,
   format: 5,
   iBoxVersion: 2,
   phoneWorkMode: 2,
