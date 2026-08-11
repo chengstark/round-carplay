@@ -25,12 +25,17 @@ const style = {
 const BACKGROUND = 'rgb(160, 186, 204)';
 
 // The CarPlay square is a plain block in the circle's top-left corner, nudged into the
-// middle by translate(22%, 22%) — 22% of its own 69% size. Its bottom edge therefore
-// sits at 69 * 1.22 = 84.18% of the circle's diameter. Keep the circle a block element:
-// giving it display:flex would centre the square first and the translate would then
-// shove it out of the circle.
-const SQUARE_SIZE_PCT = 69;
-const SQUARE_SHIFT_PCT = 22;
+// middle by a translate of SQUARE_SHIFT_PCT — a percentage of the square's *own* size, so
+// it has to track the size. The formula below centres the square in the circle (it gives
+// 22.5% at the old 69% size, matching the hand-tuned value it replaces), leaving
+// SQUARE_SIZE_PCT as the only knob. Keep the circle a block element: giving it display:flex
+// would centre the square first and the translate would then shove it out of the circle.
+//
+// Upper bound: a centred square with SQUARE_RADIUS_PCT corners stays inside the circle up to
+// ~74%; past that the corners are clipped by the circle's overflow:hidden. Growing the
+// square also eats into the ring below it, so the filler artwork shrinks to match.
+const SQUARE_SIZE_PCT = 72;
+const SQUARE_SHIFT_PCT = 5000 / SQUARE_SIZE_PCT - 50;
 const SQUARE_BOTTOM_PCT = SQUARE_SIZE_PCT * (1 + SQUARE_SHIFT_PCT / 100);
 
 // Rounded corners on the CarPlay area. As a percentage it scales with the display;
