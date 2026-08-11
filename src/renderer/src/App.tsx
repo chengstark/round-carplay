@@ -33,6 +33,10 @@ const SQUARE_SIZE_PCT = 69;
 const SQUARE_SHIFT_PCT = 22;
 const SQUARE_BOTTOM_PCT = SQUARE_SIZE_PCT * (1 + SQUARE_SHIFT_PCT / 100);
 
+// Rounded corners on the CarPlay area. As a percentage it scales with the display;
+// the element is square, so both axes get the same radius and the arcs stay circular.
+const SQUARE_RADIUS_PCT = 8;
+
 // Filler artwork in the ring below the square, with a margin between the two.
 const FILLER_MARGIN_PCT = 1.6;
 const FILLER_TOP_PCT = SQUARE_BOTTOM_PCT + FILLER_MARGIN_PCT;
@@ -137,6 +141,8 @@ function App() {
             width: `${SQUARE_SIZE_PCT}%`,
             height: `${SQUARE_SIZE_PCT}%`,
             transform: `translate(${SQUARE_SHIFT_PCT}%, ${SQUARE_SHIFT_PCT}%)`,
+            borderRadius: `${SQUARE_RADIUS_PCT}%`,
+            overflow: "hidden",
             border: "0px solid lime"
           }}
         >
