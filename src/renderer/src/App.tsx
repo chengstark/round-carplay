@@ -10,6 +10,9 @@ import { Box, Modal } from '@mui/material';
 import { useCarplayStore, useStatusStore } from "./store/store";
 import type { KeyCommand } from "./components/worker/types";
 import { updateCameras } from "./utils/cameraDetection";
+import PorscheClock from "./components/clock/PorscheClock";
+import CrescentButton from "./components/clock/CrescentButton";
+import { useDoubleTap } from "./components/clock/useDoubleTap";
 
 const style = {
   position: 'absolute',
@@ -56,15 +59,37 @@ const ART_HEIGHT_FRACTION = 0.68;
 const FILLER_IMG_HEIGHT_PCT = FILLER_HEIGHT_PCT / ART_HEIGHT_FRACTION;
 const FILLER_IMG_TOP_PCT = FILLER_TOP_PCT - FILLER_IMG_HEIGHT_PCT * ART_TOP_FRACTION;
 
+// The clock button claims the whole empty crescent to the left of the CarPlay
+// square — the largest target the layout can give a driver — and CrescentButton
+// draws that lune as a visible shape so the region reads as a button rather than
+// as empty ring that happens to be tappable. Both numbers derive from the
+// square, so resizing CarPlay reshapes the button with it.
+const SQUARE_LEFT_PCT = SQUARE_SIZE_PCT * (SQUARE_SHIFT_PCT / 100);
+
+// Gap between the button's inner edge and the CarPlay square. It started at the
+// filler artwork's 1.6% and was tightened to bring the button closer to CarPlay;
+// the 1.1% difference is about 1mm on a 3.5-4in panel, nearer 0.6mm on a 2.1in
+// one, so nudge this down again if the display is smaller than that.
+//
+// The button grows rightwards rather than sliding: its outer arc has to stay
+// pinned to the edge of the display, or a sliver of bare ring opens up outside
+// it. Lower bound is roughly 0.2% — below that the button's tips foul the
+// square's rounded corners, which sit inboard of its straight edge.
+const CLOCK_BUTTON_GAP_PCT = 0.5;
+const CLOCK_BUTTON_RIGHT_PCT = SQUARE_LEFT_PCT - CLOCK_BUTTON_GAP_PCT;
+
 
 function App() {
   const [time, setTime] = useState(new Date());
+  const [clockMode, setClockMode] = useState(false);
   const [receivingVideo, setReceivingVideo] = useState(false);
   const [commandCounter, setCommandCounter] = useState(0);
   const [keyCommand, setKeyCommand] = useState('');
 
   const reverse = useStatusStore(state => state.reverse);
   const setReverse = useStatusStore(state => state.setReverse);
+
+  const clockButton = useDoubleTap(() => setClockMode(true));
 
   const settings = useCarplayStore(state => state.settings);
   const saveSettings = useCarplayStore(state => state.saveSettings);
@@ -217,6 +242,35 @@ function App() {
             minute: "2-digit",
           })}
         </div>
+
+        {/* Clock button: the whole crescent left of CarPlay, drawn as a visible
+            shape. Double-tap to open, so a hand brushing the panel can't swap
+            the display mid-drive; the first tap lights the crescent so the
+            control shows it heard you. The icon is the dial itself, running
+            live, so it doubles as a small gauge while CarPlay is up. */}
+        <CrescentButton
+          rightEdgePct={CLOCK_BUTTON_RIGHT_PCT}
+          armed={clockButton.armed}
+          onClick={clockButton.onClick}
+          finish="graphite"
+        />
+
+        {/* Clock mode: covers the whole round display rather than replacing the
+            view, so CarPlay stays mounted and streaming underneath and coming
+            back is instant. Tap the face to return. */}
+        {clockMode && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              backgroundColor: "#000",
+              zIndex: 20,
+              touchAction: "none"
+            }}
+          >
+            <PorscheClock variant="full" onExit={() => setClockMode(false)} />
+          </div>
+        )}
 
       </div>
     </div>
