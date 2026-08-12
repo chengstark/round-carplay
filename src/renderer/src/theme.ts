@@ -147,7 +147,29 @@ function buildTheme(mode: 'light' | 'dark') {
 export const lightTheme = buildTheme('light')
 export const darkTheme = buildTheme('dark')
 
+/**
+ * Hides the mouse pointer.
+ *
+ * With a positive `inactivityMs` the pointer shows on mouse movement and hides
+ * again after that idle time. Pass 0 for a touch-only panel: the pointer is then
+ * hidden outright and never comes back — no reveal on movement, and nothing
+ * visible during the idle window at startup.
+ *
+ * The always-hidden path is a stylesheet rule rather than the element walk
+ * below, because the walk only reaches body, #main and MUI roots. Anything else
+ * that sets a cursor of its own — a plain <button>, an SVG hit area — would keep
+ * showing a pointer. The universal selector catches those, and `!important` is
+ * needed to beat the explicit `cursor: default` this theme puts on MUI roots.
+ */
 export function initCursorHider(inactivityMs: number = 5000) {
+  if (inactivityMs <= 0) {
+    const style = document.createElement('style')
+    style.dataset.cursorHider = 'always'
+    style.textContent = '*, *::before, *::after { cursor: none !important; }'
+    document.head.appendChild(style)
+    return
+  }
+
   let timer: ReturnType<typeof setTimeout>
   const setCursor = (value: string) => {
     const elems = [

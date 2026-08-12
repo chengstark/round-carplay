@@ -11,11 +11,6 @@
 
 import React from 'react'
 import {
-  BEZEL_LIP_R,
-  BEZEL_LIP_W,
-  BEZEL_OUTER_R,
-  BEZEL_RING_R,
-  BEZEL_RING_W,
   BRAND_SIZE,
   BRAND_Y,
   C,
@@ -64,15 +59,7 @@ export function FaceDefs({ idPrefix }: IdProps): React.JSX.Element {
         <stop offset="100%" stopColor={COLORS.dialEdge} />
       </radialGradient>
 
-      {/* Bezel: lit from above, as a chrome ring in a dash would be. */}
-      <linearGradient id={`${idPrefix}-bezel`} x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor={COLORS.bezelLight} />
-        <stop offset="38%" stopColor={COLORS.bezelMid} />
-        <stop offset="70%" stopColor={COLORS.bezelDark} />
-        <stop offset="100%" stopColor={COLORS.bezelMid} />
-      </linearGradient>
-
-      {/* Glass sheen, clipped to the dial so it never spills onto the bezel. */}
+      {/* Glass sheen, clipped to the dial so it never spills past the edge. */}
       <radialGradient id={`${idPrefix}-sheen`} cx="34%" cy="26%" r="52%">
         <stop offset="0%" stopColor="#ffffff" stopOpacity="0.075" />
         <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
@@ -86,33 +73,11 @@ export function FaceDefs({ idPrefix }: IdProps): React.JSX.Element {
 }
 
 /**
- * Outer rim and the dial it encloses.
+ * The dial face itself. No rim is drawn — the display is already mounted in a
+ * real bezel, and the viewBox is cropped to this circle, so it runs edge to edge.
  */
-export function Bezel({ idPrefix }: IdProps): React.JSX.Element {
-  return (
-    <g>
-      <circle cx={C} cy={C} r={BEZEL_OUTER_R} fill={COLORS.bezelDark} />
-      <circle
-        cx={C}
-        cy={C}
-        r={BEZEL_RING_R}
-        fill="none"
-        stroke={`url(#${idPrefix}-bezel)`}
-        strokeWidth={BEZEL_RING_W}
-      />
-      {/* Dark lip where the rim meets the dial — reads as the shadow under the
-          bezel and stops the chrome from bleeding into the face. */}
-      <circle
-        cx={C}
-        cy={C}
-        r={BEZEL_LIP_R}
-        fill="none"
-        stroke="#000000"
-        strokeWidth={BEZEL_LIP_W}
-      />
-      <circle cx={C} cy={C} r={DIAL_R} fill={`url(#${idPrefix}-dial)`} />
-    </g>
-  )
+export function Dial({ idPrefix }: IdProps): React.JSX.Element {
+  return <circle cx={C} cy={C} r={DIAL_R} fill={`url(#${idPrefix}-dial)`} />
 }
 
 /**

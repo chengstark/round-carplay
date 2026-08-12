@@ -12,8 +12,8 @@
 
 import React, { useEffect, useId, useRef } from 'react'
 import {
-  Bezel,
   Branding,
+  Dial,
   FaceDefs,
   HourHand,
   Hub,
@@ -23,7 +23,7 @@ import {
   Sheen,
   TickRing
 } from './faceParts'
-import { C, HUB_HIT_R, SIZE } from './geometry'
+import { C, DIAL_VIEW_BOX, HUB_HIT_R } from './geometry'
 
 /** How often the mini dial repositions its hands. It has no seconds hand, so
  *  anything under half a minute is invisible work. */
@@ -104,14 +104,14 @@ export default function PorscheClock({
 
   return (
     <svg
-      viewBox={`0 0 ${SIZE} ${SIZE}`}
+      viewBox={DIAL_VIEW_BOX}
       width="100%"
       height="100%"
       preserveAspectRatio="xMidYMid meet"
       style={{ display: 'block' }}
     >
       <FaceDefs idPrefix={idPrefix} />
-      <Bezel idPrefix={idPrefix} />
+      <Dial idPrefix={idPrefix} />
 
       {/* Printed layer */}
       <TickRing boost={isFull ? 1 : 2.1} hourTicksOnly={!isFull} />
@@ -128,17 +128,10 @@ export default function PorscheClock({
 
       {/* The secret way out: an invisible disc over the centre knob. Only this
           region is interactive, so resting a hand on the dial or catching it
-          with a sleeve leaves the clock up. */}
-      {onExit && (
-        <circle
-          cx={C}
-          cy={C}
-          r={HUB_HIT_R}
-          fill="transparent"
-          onClick={onExit}
-          style={{ cursor: 'pointer' }}
-        />
-      )}
+          with a sleeve leaves the clock up. It sets no cursor of its own — the
+          `cursor` property inherits, and initCursorHider() drives the whole page
+          from body, so anything set here would defeat the auto-hide. */}
+      {onExit && <circle cx={C} cy={C} r={HUB_HIT_R} fill="transparent" onClick={onExit} />}
     </svg>
   )
 }

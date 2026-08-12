@@ -35,6 +35,14 @@ const ARC_INSET = 5
 const FACE_INSET = 3
 const DEPTH = 6
 
+/** The wall is the face pushed DEPTH down, so the moulding as a whole spans from
+ *  the top of the face to the bottom of the wall — its visual centre sits half a
+ *  DEPTH below the display's axis even though the face is perfectly centred on
+ *  it. Lifting everything by that half puts the composite back on the axis. This
+ *  is why the number is DEPTH / 2 and not a hand-tuned nudge: change the
+ *  extrusion depth and the correction follows it. */
+const OPTICAL_LIFT = DEPTH / 2
+
 /** Radius of the moulded corners, applied by stroking the path with round
  *  joins in its own colour: half the stroke width becomes the corner radius.
  *  Without it the lune's tips come to points, which reads as cut paper. */
@@ -138,9 +146,10 @@ export default function CrescentButton({
   const facePath = lune(rightEdge - FACE_INSET, faceRadius, true)
   const specPath = lune(rightEdge - FACE_INSET, faceRadius, false)
 
-  // Travel is a share of the button's height — which is the display's height —
-  // so the press scales with the panel exactly as the shape does.
+  // Travel and lift are shares of the button's height — which is the display's
+  // height — so both scale with the panel exactly as the shape does.
   const travelPct = (DEPTH / SIZE) * 100
+  const liftPct = (OPTICAL_LIFT / SIZE) * 100
 
   return (
     <button
@@ -156,7 +165,11 @@ export default function CrescentButton({
         padding: 0,
         border: 'none',
         background: 'transparent',
-        cursor: 'pointer',
+        // Inherit, don't set. A <button>'s UA default would stop the cascade
+        // here, and initCursorHider() only reaches body, #main and MUI roots —
+        // so any cursor of our own would survive the auto-hide and leave a
+        // pointer stuck over the button forever. Inheriting lets it follow body.
+        cursor: 'inherit',
         touchAction: 'manipulation',
         WebkitTapHighlightColor: 'transparent',
         zIndex: 10
@@ -185,57 +198,62 @@ export default function CrescentButton({
           </linearGradient>
         </defs>
 
-        {/* Side wall. Sits DEPTH below the face at rest; when pressed the face
-            comes down to meet it and the thickness disappears. */}
-        <g transform={`translate(0 ${DEPTH})`}>
-          <path
-            d={facePath}
-            fill={paint.wall}
-            stroke={paint.wall}
-            strokeWidth={CORNER}
-            strokeLinejoin="round"
-          />
-        </g>
+        {/* Everything the moulding is made of rides on this lift, so the face
+            and the wall stay a rigid object and only their centre moves. */}
+        <g transform={`translate(0 ${-OPTICAL_LIFT})`}>
+          {/* Side wall. Sits DEPTH below the face at rest; when pressed the face
+              comes down to meet it and the thickness disappears. */}
+          <g transform={`translate(0 ${DEPTH})`}>
+            <path
+              d={facePath}
+              fill={paint.wall}
+              stroke={paint.wall}
+              strokeWidth={CORNER}
+              strokeLinejoin="round"
+            />
+          </g>
 
-        {/* Top face */}
-        <g
-          transform={`translate(0 ${armed ? DEPTH : 0})`}
-          style={{ transition: 'transform 90ms ease-out' }}
-        >
-          <path
-            d={facePath}
-            fill={`url(#${gradientId}-face)`}
-            stroke={`url(#${gradientId}-face)`}
-            strokeWidth={CORNER}
-            strokeLinejoin="round"
-          />
-          {/* Hairline where the face rolls over into the wall. */}
-          <path
-            d={facePath}
-            fill="none"
-            stroke={paint.edge}
-            strokeWidth={1.5}
-            strokeLinejoin="round"
-          />
-          {/* Specular shoulder along the outer arc. */}
-          <path
-            d={specPath}
-            fill="none"
-            stroke={`url(#${gradientId}-spec)`}
-            strokeWidth={3.5}
-            strokeLinecap="round"
-          />
+          {/* Top face */}
+          <g
+            transform={`translate(0 ${armed ? DEPTH : 0})`}
+            style={{ transition: 'transform 90ms ease-out' }}
+          >
+            <path
+              d={facePath}
+              fill={`url(#${gradientId}-face)`}
+              stroke={`url(#${gradientId}-face)`}
+              strokeWidth={CORNER}
+              strokeLinejoin="round"
+            />
+            {/* Hairline where the face rolls over into the wall. */}
+            <path
+              d={facePath}
+              fill="none"
+              stroke={paint.edge}
+              strokeWidth={1.5}
+              strokeLinejoin="round"
+            />
+            {/* Specular shoulder along the outer arc. */}
+            <path
+              d={specPath}
+              fill="none"
+              stroke={`url(#${gradientId}-spec)`}
+              strokeWidth={3.5}
+              strokeLinecap="round"
+            />
+          </g>
         </g>
       </svg>
 
-      {/* Dial rides on the top face, so it travels with the press. Centred on
-          the face rather than on the button's box — the face starts at
-          ARC_INSET + FACE_INSET, so the two centres differ and the dial would
-          otherwise sit visibly left of the moulding it's set into. */}
+      {/* Dial rides on the top face, so it takes the same optical lift and
+          travels with the press. Centred on the face rather than on the button's
+          box — the face starts at ARC_INSET + FACE_INSET, so the two centres
+          differ and the dial would otherwise sit visibly left of the moulding
+          it's set into. */}
       <div
         style={{
           position: 'absolute',
-          top: armed ? `${50 + travelPct}%` : '50%',
+          top: `${50 - liftPct + (armed ? travelPct : 0)}%`,
           left: `${((ARC_INSET + FACE_INSET + rightEdge - FACE_INSET) / 2 / rightEdge) * 100}%`,
           transform: 'translate(-50%, -50%)',
           width: `${DIAL_PCT}%`,

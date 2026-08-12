@@ -13,25 +13,32 @@
 export const SIZE = 540
 export const C = SIZE / 2
 
-// --- Bezel -----------------------------------------------------------------
-// The chrome-ish rim of the OEM gauge. Drawn as two concentric strokes rather
-// than a filled annulus so the highlight gradient has somewhere to live.
-export const BEZEL_OUTER_R = 270
-export const BEZEL_RING_R = 262
-export const BEZEL_RING_W = 14
-export const BEZEL_LIP_R = 254
-export const BEZEL_LIP_W = 4
-
 // --- Dial ------------------------------------------------------------------
 export const DIAL_R = 252
+
+// No bezel is drawn. The panel is already mounted in a real one, so a painted
+// chrome rim would read as a second bezel inside the first. Instead the clock's
+// viewBox is cropped to the dial's own bounding box, which makes the dial fill
+// whatever box it is given rather than sitting inset behind painted trim.
+// Everything below stays in the original 540 coordinates — only the window onto
+// them changed — so the printing keeps its proportions relative to the dial.
+export const DIAL_VIEW_BOX = `${C - DIAL_R} ${C - DIAL_R} ${DIAL_R * 2} ${DIAL_R * 2}`
 
 // --- Ticks -----------------------------------------------------------------
 // The VDO face uses a long/short pattern: every minute gets a thin mark, every
 // fifth minute gets a much longer and heavier one. The 12/3/6/9 positions get
 // the same long mark as the other fifths — the numerals sit inboard of them.
-export const TICK_OUTER_R = 238
-export const TICK_MINUTE_INNER_R = 224
-export const TICK_HOUR_INNER_R = 208
+//
+// The ring ends flush with the dial edge — TICK_OUTER_R is DIAL_R, not a number
+// short of it — so there is no dead band of blank dial outside the printing.
+// With no drawn bezel, that band would just read as the face not reaching the
+// glass. Tick lengths are given as lengths and the inner radii derived, so
+// moving the ring never silently restyles the marks.
+export const TICK_OUTER_R = DIAL_R
+export const TICK_MINUTE_LEN = 14
+export const TICK_HOUR_LEN = 30
+export const TICK_MINUTE_INNER_R = TICK_OUTER_R - TICK_MINUTE_LEN
+export const TICK_HOUR_INNER_R = TICK_OUTER_R - TICK_HOUR_LEN
 export const TICK_MINUTE_W = 3.2
 export const TICK_HOUR_W = 8.5
 
@@ -81,9 +88,6 @@ export const HUB_HIT_R = 54
 
 // --- Palette ---------------------------------------------------------------
 export const COLORS = {
-  bezelDark: '#0b0b0d',
-  bezelMid: '#2b2d32',
-  bezelLight: '#54575e',
   dialCenter: '#141519',
   dialEdge: '#050506',
   // Warm off-white: OEM dial printing is never pure #fff, and pure white looks
