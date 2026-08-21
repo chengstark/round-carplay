@@ -70,7 +70,7 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
     const updated = { ...activeSettings, [key]: value }
     setActiveSettings(updated)
 
-    if (['audioVolume', 'navVolume'].includes(key)) {
+    if (['audioVolume', 'navVolume', 'wifiCameraRotation'].includes(key)) {
       debouncedSave(updated)
     } else if (['kiosk', 'nightMode'].includes(key)) {
       saveSettings(updated)
@@ -233,6 +233,43 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
 
           <Grid size={{ xs: 3 }} sx={{ minWidth: 140, mx: 2, display: 'flex', justifyContent: 'center' }}>
             <FormControl fullWidth><FormLabel>WIFI TYPE</FormLabel><RadioGroup value={activeSettings.wifiType} onChange={e => settingsChange('wifiType', e.target.value)}><Stack direction="column"><FormControlLabel value="2.4ghz" control={<Radio />} label="2.4G" /><FormControlLabel value="5ghz" control={<Radio />} label="5G" /></Stack></RadioGroup></FormControl>
+          </Grid>
+
+          <Grid size={{ xs: 6 }} sx={{ minWidth: 280, mx: 2 }}>
+            <FormControl fullWidth>
+              <FormLabel>WI-FI CAMERA ROTATION</FormLabel>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Slider
+                  value={activeSettings.wifiCameraRotation}
+                  min={0}
+                  max={359}
+                  step={1}
+                  marks={[
+                    { value: 0, label: '0°' },
+                    { value: 90, label: '90°' },
+                    { value: 180, label: '180°' },
+                    { value: 270, label: '270°' },
+                    { value: 359, label: '359°' }
+                  ]}
+                  valueLabelDisplay="auto"
+                  valueLabelFormat={value => `${value}°`}
+                  onChange={(_, value) => {
+                    if (typeof value === 'number') settingsChange('wifiCameraRotation', value)
+                  }}
+                />
+                <TextField
+                  label="DEGREES"
+                  type="number"
+                  value={activeSettings.wifiCameraRotation}
+                  inputProps={{ min: 0, max: 359, step: 1 }}
+                  onChange={event => {
+                    const value = Math.min(359, Math.max(0, Math.round(Number(event.target.value))))
+                    settingsChange('wifiCameraRotation', value)
+                  }}
+                  sx={{ width: 110, flexShrink: 0 }}
+                />
+              </Stack>
+            </FormControl>
           </Grid>
 
           <Grid size={{ xs: 3 }} sx={{ minWidth: 140, mx: 2, display: 'flex', justifyContent: 'center' }}>

@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
 import { ExtraConfig } from '../main/Globals'
+import type { GpsState } from '../main/gps/GpsService'
+import type {
+  IpAddress,
+  NetworkSnapshot,
+  WifiConnectResult
+} from '../main/network/NetworkService'
 
 type ApiCallback<T = any> = (event: IpcRendererEvent, ...args: T[]) => void
 
@@ -40,7 +46,7 @@ ipcRenderer.on('carplay-audio-chunk', (_event, payload) => {
   }
 })
 
-const api = {
+export const api = {
   quit: () => ipcRenderer.invoke('quit'),
 
   onUSBResetStatus: (callback: ApiCallback<any>) => {
@@ -70,6 +76,43 @@ const api = {
     onUpdate: (callback: ApiCallback<ExtraConfig>) => ipcRenderer.on('settings', callback)
   },
 
+  wifiCamera: {
+    start: () => ipcRenderer.invoke('wifi-camera-start'),
+    stop: () => ipcRenderer.invoke('wifi-camera-stop'),
+    acknowledgeFrame: () => ipcRenderer.send('wifi-camera-frame-ack'),
+    onFrame: (callback: (frame: Uint8Array) => void) => {
+      const listener = (_event: IpcRendererEvent, frame: Uint8Array) => callback(frame)
+      ipcRenderer.on('wifi-camera-frame', listener)
+      return () => ipcRenderer.removeListener('wifi-camera-frame', listener)
+    },
+    onStatus: (
+      callback: (status: {
+        state: 'connecting' | 'streaming' | 'error' | 'stopped'
+        message: string
+      }) => void
+    ) => {
+      const listener = (_event: IpcRendererEvent, status: any) => callback(status)
+      ipcRenderer.on('wifi-camera-status', listener)
+      return () => ipcRenderer.removeListener('wifi-camera-status', listener)
+    }
+  },
+
+  gps: {
+    getState: (): Promise<GpsState> => ipcRenderer.invoke('gps-get-state'),
+    onState: (callback: (state: GpsState) => void) => {
+      const listener = (_event: IpcRendererEvent, state: GpsState) => callback(state)
+      ipcRenderer.on('gps-state', listener)
+      return () => ipcRenderer.removeListener('gps-state', listener)
+    }
+  },
+
+  network: {
+    scanWifi: (): Promise<NetworkSnapshot> => ipcRenderer.invoke('network-scan-wifi'),
+    connectWifi: (ssid: string, password: string): Promise<WifiConnectResult> =>
+      ipcRenderer.invoke('network-connect-wifi', ssid, password),
+    getIpAddresses: (): Promise<IpAddress[]> => ipcRenderer.invoke('network-get-ip-addresses')
+  },
+
   ipc: {
     start: () => ipcRenderer.invoke('carplay-start'),
     stop: () => ipcRenderer.invoke('carplay-stop'),
@@ -91,6 +134,8 @@ const api = {
     }
   }
 }
+
+export type Api = typeof api
 
 contextBridge.exposeInMainWorld('carplay', api)
 

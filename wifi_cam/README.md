@@ -1,8 +1,10 @@
 # Wi-Fi backup camera viewer
 
-Low-latency native viewer for the JieLi AC792x/CC31 Wi-Fi backup camera used by
-Round CarPlay. The camera control connection uses TCP port 3333 and the JPEG
-video stream uses UDP port 2224.
+Low-latency native diagnostic viewer for the JieLi AC792x/CC31 Wi-Fi backup
+camera used by Round CarPlay. The Electron application includes its own
+integrated receiver; this SDL program remains useful for protocol and latency
+testing outside the round-display UI. The camera control connection uses TCP
+port 3333 and the JPEG video stream uses UDP port 2224.
 
 The camera currently delivers 1280x720 even when 640x480 is requested. The
 viewer always presents the latest complete frame to minimize reversing-camera

@@ -108,11 +108,14 @@ export type FinishName = keyof typeof FINISHES
 
 interface CrescentButtonProps {
   /** Inner edge of the crescent, as a percentage of the display's width. */
-  rightEdgePct: number
+  edgePct: number
+  /** Which side of the round display owns the crescent. */
+  side?: 'left' | 'right'
   /** First tap of the double-tap has landed and the second is expected. */
   armed: boolean
   onClick: () => void
   finish?: FinishName
+  content?: 'clock' | 'camera'
 }
 
 /**
@@ -120,31 +123,41 @@ interface CrescentButtonProps {
  * intersection around the outside of the display to the bottom one; the caller
  * decides whether to close it.
  */
-function lune(rightEdge: number, radius: number, closed: boolean): string {
-  const dx = R - rightEdge
+function lune(edge: number, radius: number, closed: boolean, side: 'left' | 'right'): string {
+  const dx = Math.abs(R - edge)
   // A crescent this shallow has no interior to draw — bail rather than emit a
   // path with a NaN in it.
   if (dx >= radius) return ''
   const dy = Math.sqrt(radius * radius - dx * dx)
-  const x = rightEdge.toFixed(2)
-  return `M ${x} ${(R - dy).toFixed(2)} A ${radius.toFixed(2)} ${radius.toFixed(2)} 0 0 0 ${x} ${(R + dy).toFixed(2)}${closed ? ' Z' : ''}`
+  const x = edge.toFixed(2)
+  const sweep = side === 'left' ? 0 : 1
+  return `M ${x} ${(R - dy).toFixed(2)} A ${radius.toFixed(2)} ${radius.toFixed(2)} 0 0 ${sweep} ${x} ${(R + dy).toFixed(2)}${closed ? ' Z' : ''}`
 }
 
 export default function CrescentButton({
-  rightEdgePct,
+  edgePct,
+  side = 'left',
   armed,
   onClick,
-  finish = 'graphite'
+  finish = 'graphite',
+  content = 'clock'
 }: CrescentButtonProps): React.JSX.Element {
-  const rightEdge = (rightEdgePct / 100) * SIZE
+  const edge = (edgePct / 100) * SIZE
+  const buttonWidth = side === 'left' ? edge : SIZE - edge
   const paint = FINISHES[finish] ?? FINISHES.graphite
   const gradientId = `crescent-${useId().replace(/:/g, '')}`
 
   // The face is inset from the button's outer bound on both the arc side and
   // the straight side, so the wall shows as a consistent thickness all round.
   const faceRadius = R - ARC_INSET - FACE_INSET
-  const facePath = lune(rightEdge - FACE_INSET, faceRadius, true)
-  const specPath = lune(rightEdge - FACE_INSET, faceRadius, false)
+  const faceEdge = edge + (side === 'left' ? -FACE_INSET : FACE_INSET)
+  const facePath = lune(faceEdge, faceRadius, true, side)
+  const specPath = lune(faceEdge, faceRadius, false, side)
+  const outerFaceEdge = side === 'left' ? ARC_INSET + FACE_INSET : SIZE - ARC_INSET - FACE_INSET
+  const contentCenter =
+    side === 'left'
+      ? ((outerFaceEdge + faceEdge) / 2 / buttonWidth) * 100
+      : (((outerFaceEdge + faceEdge) / 2 - edge) / buttonWidth) * 100
 
   // Travel and lift are shares of the button's height — which is the display's
   // height — so both scale with the panel exactly as the shape does.
@@ -154,13 +167,13 @@ export default function CrescentButton({
   return (
     <button
       type="button"
-      aria-label="Clock — double tap to open"
+      aria-label={`${content === 'clock' ? 'Clock' : 'Wi-Fi camera'} — double tap to open`}
       onClick={onClick}
       style={{
         position: 'absolute',
         top: 0,
-        left: 0,
-        width: `${rightEdgePct}%`,
+        left: side === 'left' ? 0 : `${edgePct}%`,
+        width: `${side === 'left' ? edgePct : 100 - edgePct}%`,
         height: '100%',
         padding: 0,
         border: 'none',
@@ -178,7 +191,9 @@ export default function CrescentButton({
       {/* The viewBox is the slice of the display this button occupies, so the
           paths can be written in the display's own coordinates. */}
       <svg
-        viewBox={`0 0 ${rightEdge} ${SIZE}`}
+        viewBox={
+          side === 'left' ? `0 0 ${buttonWidth} ${SIZE}` : `${edge} 0 ${buttonWidth} ${SIZE}`
+        }
         width="100%"
         height="100%"
         preserveAspectRatio="xMidYMid meet"
@@ -254,7 +269,7 @@ export default function CrescentButton({
         style={{
           position: 'absolute',
           top: `${50 - liftPct + (armed ? travelPct : 0)}%`,
-          left: `${((ARC_INSET + FACE_INSET + rightEdge - FACE_INSET) / 2 / rightEdge) * 100}%`,
+          left: `${contentCenter}%`,
           transform: 'translate(-50%, -50%)',
           width: `${DIAL_PCT}%`,
           aspectRatio: '1',
@@ -265,8 +280,23 @@ export default function CrescentButton({
           transition: 'top 90ms ease-out'
         }}
       >
-        <PorscheClock variant="mini" />
+        {content === 'clock' ? <PorscheClock variant="mini" /> : <CameraGlyph />}
       </div>
     </button>
+  )
+}
+
+function CameraGlyph(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true">
+      <circle cx="50" cy="50" r="49" fill="#111216" />
+      <path
+        d="M25 36h12l5-8h16l5 8h12c5 0 8 3 8 8v28c0 5-3 8-8 8H25c-5 0-8-3-8-8V44c0-5 3-8 8-8Z"
+        fill="#e6e3db"
+      />
+      <circle cx="50" cy="56" r="15" fill="#25272c" />
+      <circle cx="50" cy="56" r="9" fill="#70889a" />
+      <circle cx="71" cy="45" r="3" fill="#d8261d" />
+    </svg>
   )
 }

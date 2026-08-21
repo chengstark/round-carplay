@@ -6,13 +6,17 @@ import Home from "./components/Home";
 import Nav from "./components/Nav";
 import Carplay from './components/Carplay';
 import Camera from './components/Camera';
-import { Box, Modal } from '@mui/material';
+import WifiCamera from './components/WifiCamera';
+import SystemMenu from './components/SystemMenu';
+import { Box, IconButton, Modal } from '@mui/material';
+import MenuIcon from '@mui/icons-material/Menu';
 import { useCarplayStore, useStatusStore } from "./store/store";
 import type { KeyCommand } from "./components/worker/types";
 import { updateCameras } from "./utils/cameraDetection";
 import PorscheClock from "./components/clock/PorscheClock";
 import CrescentButton from "./components/clock/CrescentButton";
 import { useDoubleTap } from "./components/clock/useDoubleTap";
+import type { GpsState } from "../../main/gps/GpsService";
 
 const style = {
   position: 'absolute',
@@ -25,7 +29,7 @@ const style = {
   display: "flex"
 };
 
-const BACKGROUND = 'rgb(160, 186, 204)';
+const DEFAULT_BACKGROUND = '#000000';
 
 // The CarPlay square is a plain block in the circle's top-left corner, nudged into the
 // middle by a translate of SQUARE_SHIFT_PCT — a percentage of the square's *own* size, so
@@ -77,11 +81,33 @@ const SQUARE_LEFT_PCT = SQUARE_SIZE_PCT * (SQUARE_SHIFT_PCT / 100);
 // square's rounded corners, which sit inboard of its straight edge.
 const CLOCK_BUTTON_GAP_PCT = 0.5;
 const CLOCK_BUTTON_RIGHT_PCT = SQUARE_LEFT_PCT - CLOCK_BUTTON_GAP_PCT;
+const SQUARE_RIGHT_PCT = SQUARE_LEFT_PCT + SQUARE_SIZE_PCT;
+const CAMERA_BUTTON_LEFT_PCT = SQUARE_RIGHT_PCT + CLOCK_BUTTON_GAP_PCT;
+
+const INITIAL_GPS_STATE: GpsState = {
+  status: 'connecting',
+  hasFix: false,
+  speedMph: null,
+  satellites: 0,
+  message: 'Waiting for GPS data'
+};
+
+function contrastText(backgroundColor: string): '#111111' | '#ffffff' {
+  const red = Number.parseInt(backgroundColor.slice(1, 3), 16);
+  const green = Number.parseInt(backgroundColor.slice(3, 5), 16);
+  const blue = Number.parseInt(backgroundColor.slice(5, 7), 16);
+  const luminance = (red * 299 + green * 587 + blue * 114) / 255000;
+  return luminance > 0.58 ? '#111111' : '#ffffff';
+}
 
 
 function App() {
   const [time, setTime] = useState(new Date());
   const [clockMode, setClockMode] = useState(false);
+  const [wifiCameraMode, setWifiCameraMode] = useState(false);
+  const [systemMenuOpen, setSystemMenuOpen] = useState(false);
+  const [showGpsSpeed, setShowGpsSpeed] = useState(false);
+  const [gpsState, setGpsState] = useState<GpsState>(INITIAL_GPS_STATE);
   const [receivingVideo, setReceivingVideo] = useState(false);
   const [commandCounter, setCommandCounter] = useState(0);
   const [keyCommand, setKeyCommand] = useState('');
@@ -90,10 +116,22 @@ function App() {
   const setReverse = useStatusStore(state => state.setReverse);
 
   const clockButton = useDoubleTap(() => setClockMode(true));
+  const wifiCameraButton = useDoubleTap(() => setWifiCameraMode(active => !active));
 
   const settings = useCarplayStore(state => state.settings);
   const saveSettings = useCarplayStore(state => state.saveSettings);
   const setCameraFound = useStatusStore(state => state.setCameraFound);
+  const backgroundColor = settings?.backgroundColor ?? DEFAULT_BACKGROUND;
+  const surroundTextColor = contrastText(backgroundColor);
+
+  const openSystemMenu = () => {
+    setWifiCameraMode(false);
+    setSystemMenuOpen(true);
+  };
+
+  const changeBackgroundColor = (color: string) => {
+    if (settings) saveSettings({ ...settings, backgroundColor: color });
+  };
 
   useEffect(() => {
     document.addEventListener('keydown', onKeyDown);
@@ -129,6 +167,24 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    const removeGpsListener = window.carplay.gps.onState(state => {
+      if (active) setGpsState(state);
+    });
+
+    window.carplay.gps.getState()
+      .then(state => {
+        if (active) setGpsState(state);
+      })
+      .catch(error => console.warn('[GPS] Could not get initial state', error));
+
+    return () => {
+      active = false;
+      removeGpsListener();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!settings) return;
 
     updateCameras(setCameraFound, saveSettings, settings);
@@ -148,7 +204,7 @@ function App() {
     {/* Schermo intero (kiosk) */}
     <div
       className="w-screen h-screen flex items-center justify-center"
-      style={{ touchAction: 'none', backgroundColor: BACKGROUND }}
+      style={{ touchAction: 'none', backgroundColor }}
     >
       {/* Outer round display */}
       <div
@@ -159,7 +215,7 @@ function App() {
           height: "min(100vw, 100vh)",
           borderRadius: "50%",
           overflow: "hidden",
-          backgroundColor: BACKGROUND,
+          backgroundColor,
           border: "0px solid red"
         }}
       >
@@ -168,6 +224,7 @@ function App() {
         <div
           className="flex items-center justify-center"
           style={{
+            position: "relative",
             width: `${SQUARE_SIZE_PCT}%`,
             height: `${SQUARE_SIZE_PCT}%`,
             transform: `translate(${SQUARE_SHIFT_PCT}%, ${SQUARE_SHIFT_PCT}%)`,
@@ -201,24 +258,108 @@ function App() {
                 <Camera settings={settings} />
               </Box>
             </Modal>
+
+            {systemMenuOpen && (
+              <SystemMenu
+                backgroundColor={backgroundColor}
+                onBackgroundColorChange={changeBackgroundColor}
+                onClose={() => setSystemMenuOpen(false)}
+              />
+            )}
           </div>
         </div>
 
-        {/* Filler artwork in the ring below the CarPlay square */}
-        <img
-          src="SCfiller.png"
-          alt=""
-          draggable={false}
+        {/* The bottom filler is also the GPS speedometer switch. The transparent
+            button covers the visible car rather than the padded image canvas,
+            so the target remains generous without stealing taps from CarPlay. */}
+        {!showGpsSpeed && (
+          <img
+            src="SCfiller.png"
+            alt=""
+            draggable={false}
+            style={{
+              position: "absolute",
+              top: `${FILLER_IMG_TOP_PCT}%`,
+              height: `${FILLER_IMG_HEIGHT_PCT}%`,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "68%",
+              objectFit: "contain",
+              pointerEvents: "none",
+              userSelect: "none"
+            }}
+          />
+        )}
+
+        {showGpsSpeed && (
+          <div
+            aria-live="polite"
+            style={{
+              position: "absolute",
+              top: `${FILLER_TOP_PCT - 0.8}%`,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "58%",
+              height: `${FILLER_HEIGHT_PCT + 0.8}%`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "min(1.1vw, 1.1vh)",
+              color: surroundTextColor,
+              textShadow: surroundTextColor === '#ffffff'
+                ? "0 1px 2px rgba(0,0,0,0.75)"
+                : "0 1px 1px rgba(255,255,255,0.5)",
+              pointerEvents: "none",
+              userSelect: "none",
+              zIndex: 7
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "'Roboto Condensed', 'Arial Narrow', sans-serif",
+                fontSize: "min(8.5vw, 8.5vh)",
+                fontWeight: 700,
+                fontVariantNumeric: "tabular-nums",
+                lineHeight: 1
+              }}
+            >
+              {gpsState.hasFix && gpsState.speedMph != null
+                ? Math.round(gpsState.speedMph)
+                : '--'}
+            </span>
+            <span
+              style={{
+                alignSelf: "flex-end",
+                marginBottom: "14%",
+                fontSize: "min(2.2vw, 2.2vh)",
+                fontWeight: 700,
+                letterSpacing: "0.12em",
+                lineHeight: 1
+              }}
+            >
+              MPH
+            </span>
+          </div>
+        )}
+
+        <button
+          type="button"
+          aria-label={showGpsSpeed ? 'Show car artwork' : 'Show GPS speed'}
+          title={showGpsSpeed ? gpsState.message : 'Show GPS speed'}
+          onClick={() => setShowGpsSpeed(current => !current)}
           style={{
             position: "absolute",
-            top: `${FILLER_IMG_TOP_PCT}%`,
-            height: `${FILLER_IMG_HEIGHT_PCT}%`,
+            top: `${FILLER_TOP_PCT}%`,
             left: "50%",
             transform: "translateX(-50%)",
-            width: "68%",
-            objectFit: "contain",
-            pointerEvents: "none",
-            userSelect: "none"
+            width: "58%",
+            height: `${FILLER_HEIGHT_PCT}%`,
+            padding: 0,
+            border: 0,
+            background: "transparent",
+            cursor: "default",
+            touchAction: "manipulation",
+            zIndex: 8
           }}
         />
 
@@ -231,7 +372,7 @@ function App() {
             transform: "translateX(-50%)",
             fontSize: "min(6vw, 6vh)",
             fontWeight: 500,
-            color: "white",
+            color: surroundTextColor,
             textShadow: "0 0 6px rgba(0,0,0,0.7)",
             zIndex: 10,
             whiteSpace: "nowrap",
@@ -243,17 +384,75 @@ function App() {
           })}
         </div>
 
+        {/* System menu lives in the surround, while its panel replaces only
+            the central CarPlay square. Closing it reveals the still-mounted
+            CarPlay surface immediately. */}
+        <IconButton
+          aria-label="Open system menu"
+          title="System menu"
+          onClick={openSystemMenu}
+          sx={{
+            position: 'absolute',
+            top: '4%',
+            right: '27%',
+            zIndex: 12,
+            width: 'min(8vw, 8vh)',
+            height: 'min(8vw, 8vh)',
+            minWidth: 36,
+            minHeight: 36,
+            color: '#fff',
+            border: '1px solid rgba(255,255,255,0.55)',
+            backgroundColor: 'rgba(0,0,0,0.68)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.45)',
+            '&:hover': { backgroundColor: 'rgba(0,0,0,0.68)' }
+          }}
+        >
+          <MenuIcon sx={{ fontSize: 'min(4.6vw, 4.6vh)' }} />
+        </IconButton>
+
         {/* Clock button: the whole crescent left of CarPlay, drawn as a visible
             shape. Double-tap to open, so a hand brushing the panel can't swap
             the display mid-drive; the first tap lights the crescent so the
             control shows it heard you. The icon is the dial itself, running
             live, so it doubles as a small gauge while CarPlay is up. */}
         <CrescentButton
-          rightEdgePct={CLOCK_BUTTON_RIGHT_PCT}
+          edgePct={CLOCK_BUTTON_RIGHT_PCT}
+          side="left"
           armed={clockButton.armed}
           onClick={clockButton.onClick}
           finish="graphite"
         />
+
+        {/* Matching control in the right crescent. It toggles the integrated
+            JieLi Wi-Fi camera path; the existing USB camera route remains
+            available from the CarPlay navigation tabs. Keeping this button
+            above the video surface lets the same double-tap close it again. */}
+        <CrescentButton
+          edgePct={CAMERA_BUTTON_LEFT_PCT}
+          side="right"
+          armed={wifiCameraButton.armed}
+          onClick={wifiCameraButton.onClick}
+          finish="graphite"
+          content="camera"
+        />
+
+        {wifiCameraMode && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 9,
+              touchAction: "none"
+            }}
+          >
+            <WifiCamera
+              rotation={settings?.wifiCameraRotation ?? 0}
+              onRotationSave={rotation => {
+                if (settings) saveSettings({ ...settings, wifiCameraRotation: rotation });
+              }}
+            />
+          </div>
+        )}
 
         {/* Clock mode: covers the whole round display rather than replacing the
             view, so CarPlay stays mounted and streaming underneath and coming

@@ -3,11 +3,16 @@ import { DongleConfig } from '@carplay/messages'
 export type ExtraConfig = DongleConfig & {
   kiosk: boolean,
   camera: string,
+  backgroundColor: string,
+  wifiCameraRotation: WifiCameraRotation,
   microphone: string,
   bindings: KeyBindings,
   audioVolume: number;
   navVolume: number;
 }
+
+/** Clockwise camera rotation in degrees, normalized to the range 0–359. */
+export type WifiCameraRotation = number
 
 export interface KeyBindings {
   'selectUp': string,

@@ -23,6 +23,37 @@ Round Caraplay is an attempt to adapt the classic Apple CarPlay to a round scree
 Support for Linux (ARM/x86) and macOS (ARM) as well. It is a standalone Electron app, optimized for embedded setups and ultra-low-resolution OEM displays.  
 
 > **Requirements:** A Carlinkit **CPC200-CCPA** (wireless & wired) or **CPC200-CCPW** (wired only) adapter.
+
+## Wi-Fi backup camera
+
+The right-side crescent button opens the integrated JieLi AC792x/CC31 Wi-Fi
+backup camera. Double-tap the button to open or close the feed. The host running
+Round CarPlay must be connected to the camera's `W-Car...` Wi-Fi network; the
+application controls `192.168.1.1:3333` and receives MJPEG on UDP port `2224`.
+The Settings screen can rotate the Wi-Fi feed continuously from `0°` through
+`359°` in one-degree steps; the selection is saved across restarts.
+For visual calibration, tap the adjustment button at the top center of the live
+feed, move the slider, then tap the same button again to save and dismiss it.
+
+The Camera tab continues to support ordinary USB cameras through the browser
+media-device API. The standalone low-latency SDL diagnostic viewer remains in
+[`wifi_cam`](wifi_cam/README.md).
+
+## GPS speedometer
+
+Tap the car artwork below the CarPlay square to switch between the artwork and
+a live MPH readout. On Raspberry Pi, the app reads 9600-baud NMEA from
+`/dev/serial0`; the serial hardware must be enabled and the serial login shell
+disabled. The display shows `-- MPH` until the receiver has a valid GPS fix.
+
+## On-display system menu
+
+The menu button in the upper surround opens a panel over the CarPlay square;
+CarPlay remains mounted and reappears immediately when the panel closes. The
+panel can change the surround color, scan and connect to NetworkManager Wi-Fi
+networks, and display the Pi's active IPv4 addresses. Raspberry Pi OS Bookworm
+and newer use NetworkManager by default.
+
 ## Installation (Raspberry Pi OS)
 
 ```bash

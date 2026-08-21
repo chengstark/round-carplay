@@ -7,6 +7,9 @@ import { Socket } from './Socket'
 import { ExtraConfig, KeyBindings } from './Globals'
 import { USBService } from './usb/USBService'
 import { CarplayService } from './carplay/CarplayService'
+import { WifiCameraService } from './wifi/WifiCameraService'
+import { GpsService } from './gps/GpsService'
+import { NetworkService } from './network/NetworkService'
 
 // Important: On Linux, enabling VA-API flags breaks WebCodecs’ hardware fallback path.
 // Requesting ‘prefer-hardware’ without a valid VA-API backend will immediately close the decoder.
@@ -87,6 +90,9 @@ let usbService: USBService
 let isQuitting = false
 
 const carplayService = new CarplayService()
+const wifiCameraService = new WifiCameraService()
+const gpsService = new GpsService()
+const networkService = new NetworkService()
 ;(global as any).carplayService = carplayService
 
 app.on('before-quit', async (e) => {
@@ -95,6 +101,8 @@ app.on('before-quit', async (e) => {
   e.preventDefault()
   try {
     carplayService['shuttingDown'] = true
+    wifiCameraService.stop()
+    gpsService.stop()
     await carplayService.stop()
     await usbService['forceReset']?.()
     await usbService.stop()
@@ -147,6 +155,8 @@ function loadConfig(): ExtraConfig {
     ...DEFAULT_CONFIG,
     kiosk: true,
     camera: '',
+    backgroundColor: '#000000',
+    wifiCameraRotation: 0,
     microphone: '',
     nightMode: true,
     audioVolume: 1.0,
@@ -159,6 +169,8 @@ function loadConfig(): ExtraConfig {
     ...DEFAULT_BINDINGS,
     ...(fileConfig.bindings || {})
   }
+  merged.backgroundColor = normalizeBackgroundColor(merged.backgroundColor)
+  merged.wifiCameraRotation = normalizeWifiCameraRotation(merged.wifiCameraRotation)
 
   const needWrite = !existsSync(configPath) || JSON.stringify(fileConfig) !== JSON.stringify(merged)
 
@@ -229,6 +241,8 @@ function createWindow(): void {
 
     if (is.dev) mainWindow.webContents.openDevTools({ mode: 'detach' })
     carplayService.attachRenderer(mainWindow.webContents)
+    wifiCameraService.attachRenderer(mainWindow.webContents)
+    gpsService.attachRenderer(mainWindow.webContents)
   })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -307,8 +321,18 @@ app.whenReady().then(() => {
   socket = new Socket(config, saveSettings)
 
   ipcMain.handle('quit', () => (process.platform === 'darwin' ? mainWindow?.hide() : app.quit()))
+  ipcMain.handle('wifi-camera-start', () => wifiCameraService.start())
+  ipcMain.handle('wifi-camera-stop', () => wifiCameraService.stop())
+  ipcMain.on('wifi-camera-frame-ack', () => wifiCameraService.acknowledgeFrame())
+  ipcMain.handle('gps-get-state', () => gpsService.getState())
+  ipcMain.handle('network-scan-wifi', () => networkService.scanWifi())
+  ipcMain.handle('network-connect-wifi', (_event, ssid: string, password: string) =>
+    networkService.connectWifi(ssid, password)
+  )
+  ipcMain.handle('network-get-ip-addresses', () => networkService.getIpAddresses())
 
   createWindow()
+  gpsService.start().catch((error) => console.error('[GPS] Startup failed', error))
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0 && !mainWindow) createWindow()
     else mainWindow?.show()
@@ -334,7 +358,9 @@ function saveSettings(settings: ExtraConfig) {
         iBoxVersion: +settings.iBoxVersion,
         phoneWorkMode: +settings.phoneWorkMode,
         packetMax: +settings.packetMax,
-        mediaDelay: +settings.mediaDelay
+        mediaDelay: +settings.mediaDelay,
+        backgroundColor: normalizeBackgroundColor(settings.backgroundColor),
+        wifiCameraRotation: normalizeWifiCameraRotation(settings.wifiCameraRotation)
       },
       null,
       2
@@ -354,4 +380,14 @@ function saveSettings(settings: ExtraConfig) {
     mainWindow.setContentSize(settings.width, settings.height, false)
     applyAspectRatio(mainWindow, settings.width, settings.height)
   }
+}
+
+function normalizeWifiCameraRotation(value: unknown): number {
+  const rotation = Number(value)
+  if (!Number.isFinite(rotation)) return 0
+  return ((rotation % 360) + 360) % 360
+}
+
+function normalizeBackgroundColor(value: unknown): string {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : '#000000'
 }
