@@ -3,6 +3,7 @@ import { IconButton, Slider, Typography } from '@mui/material'
 import CheckIcon from '@mui/icons-material/Check'
 import TuneIcon from '@mui/icons-material/Tune'
 import type { WifiCameraRotation } from '../../../main/Globals'
+import ParkingGuides from './ParkingGuides'
 
 type CameraStatus = {
   state: 'connecting' | 'streaming' | 'error' | 'stopped'
@@ -160,6 +161,7 @@ export default function WifiCamera({
         aria-label="Wi-Fi backup camera"
         style={{ width: '100%', height: '100%', display: 'block' }}
       />
+      <ParkingGuides />
 
       {!hasFrame && (
         <div

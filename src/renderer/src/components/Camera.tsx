@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Typography } from "@mui/material";
+import ParkingGuides from "./ParkingGuides";
 
 interface CameraProps {
   settings: { camera: string } | null;
@@ -64,6 +65,7 @@ const Camera: React.FC<CameraProps> = ({ settings }) => {
           display: "block",
         }}
       />
+      <ParkingGuides />
       {!cameraFound && (
         <Typography
           variant="subtitle1"

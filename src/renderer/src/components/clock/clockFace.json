@@ -4,7 +4,7 @@
   "ticks": {
     "count": 60,
     "majorEvery": 5,
-    "outerRadius": 225,
+    "outerRadius": 252,
     "minorLength": 24,
     "majorLength": 40,
     "minorWidth": 3.2,

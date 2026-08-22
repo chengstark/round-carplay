@@ -30,10 +30,10 @@ export const DIAL_VIEW_BOX = `${C - DIAL_R} ${C - DIAL_R} ${DIAL_R * 2} ${DIAL_R
 // fifth minute gets a much longer and heavier one. The 12/3/6/9 positions get
 // the same long mark as the other fifths — the numerals sit inboard of them.
 //
-// The original VDO printing is inset from the bezel. Keeping that dark outer
-// band is important: a flush ring makes the clock look oversized on the round
-// panel. Positions and lengths are emitted into generatedTickPositions.ts;
-// stroke widths remain here because the mini face applies a display-size boost.
+// Tick positions and lengths are emitted into generatedTickPositions.ts. The
+// configured outer radius is flush with the dial edge so there is no visible
+// margin outside the marks. Stroke widths remain here because the mini face
+// applies a display-size boost.
 export const TICK_MINUTE_W = clockFace.ticks.minorWidth
 export const TICK_HOUR_W = clockFace.ticks.majorWidth
 
