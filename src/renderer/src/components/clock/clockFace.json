@@ -1,0 +1,14 @@
+{
+  "size": 540,
+  "dialRadius": 252,
+  "ticks": {
+    "count": 60,
+    "majorEvery": 5,
+    "outerRadius": 225,
+    "minorLength": 24,
+    "majorLength": 40,
+    "minorWidth": 3.2,
+    "majorWidth": 8.5,
+    "coordinatePrecision": 3
+  }
+}

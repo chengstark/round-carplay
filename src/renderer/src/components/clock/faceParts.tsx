@@ -32,14 +32,12 @@ import {
   SECOND_W,
   SUBBRAND_SIZE,
   SUBBRAND_Y,
-  TICK_HOUR_INNER_R,
   TICK_HOUR_W,
-  TICK_MINUTE_INNER_R,
   TICK_MINUTE_W,
-  TICK_OUTER_R,
   handPoints,
   polar
 } from './geometry'
+import { TICK_POSITIONS } from './generatedTickPositions'
 
 interface IdProps {
   idPrefix: string
@@ -103,31 +101,22 @@ interface TickRingProps {
  * 60 marks: a thin one per minute, a long heavy one every five.
  */
 export function TickRing({ boost = 1, hourTicksOnly = false }: TickRingProps): React.JSX.Element {
-  const marks: React.JSX.Element[] = []
-
-  for (let i = 0; i < 60; i++) {
-    const isHour = i % 5 === 0
-    if (!isHour && hourTicksOnly) continue
-
-    const angle = i * 6
-    const inner = polar(isHour ? TICK_HOUR_INNER_R : TICK_MINUTE_INNER_R, angle)
-    const outer = polar(TICK_OUTER_R, angle)
-
-    marks.push(
-      <line
-        key={i}
-        x1={inner.x}
-        y1={inner.y}
-        x2={outer.x}
-        y2={outer.y}
-        stroke={isHour ? COLORS.mark : COLORS.markDim}
-        strokeWidth={(isHour ? TICK_HOUR_W : TICK_MINUTE_W) * boost}
-        strokeLinecap="butt"
-      />
-    )
-  }
-
-  return <g>{marks}</g>
+  return (
+    <g>
+      {TICK_POSITIONS.filter(mark => mark.isMajor || !hourTicksOnly).map(mark => (
+        <line
+          key={mark.index}
+          x1={mark.x1}
+          y1={mark.y1}
+          x2={mark.x2}
+          y2={mark.y2}
+          stroke={mark.isMajor ? COLORS.mark : COLORS.markDim}
+          strokeWidth={(mark.isMajor ? TICK_HOUR_W : TICK_MINUTE_W) * boost}
+          strokeLinecap="butt"
+        />
+      ))}
+    </g>
+  )
 }
 
 /**

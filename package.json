@@ -6,6 +6,8 @@
   "author": "Lasse Heitgres",
   "homepage": "https://f-io.dev",
   "scripts": {
+    "clock:generate": "node scripts/generate-clock-ticks.mjs",
+    "clock:check": "node scripts/generate-clock-ticks.mjs --check",
     "format": "prettier --write .",
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
@@ -14,11 +16,11 @@
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "install:clean": "rm -rf node_modules package-lock.json dist && npm install --no-audit --loglevel=verbose",
-    "build": "npm run typecheck && electron-vite build",
+    "build": "npm run clock:check && npm run typecheck && electron-vite build",
     "postinstall": "electron-builder install-app-deps",
-    "build:mac": "electron-vite build && electron-builder --mac --arm64 --config",
-    "build:linux": "electron-vite build && electron-builder --linux --config",
-    "build:armLinux": "electron-vite build && electron-builder --linux AppImage --arm64 --config"
+    "build:mac": "npm run clock:check && electron-vite build && electron-builder --mac --arm64 --config",
+    "build:linux": "npm run clock:check && electron-vite build && electron-builder --linux --config",
+    "build:armLinux": "npm run clock:check && electron-vite build && electron-builder --linux AppImage --arm64 --config"
   },
   "dependencies": {
     "@electron-toolkit/utils": "4.0.0",

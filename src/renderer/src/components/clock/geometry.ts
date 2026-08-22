@@ -1,20 +1,21 @@
 // Geometry and palette for the Porsche/VDO "Quarz-Zeit" clock face.
 //
-// Everything is authored against a 540 x 540 viewBox because that is the native
-// size of the round panel, but nothing here depends on that: the SVG scales, so
-// these numbers are really "parts of the dial diameter". The dial is drawn
-// full-bleed — radius 270 touches the edge of the viewBox — because the whole
-// point is for the screen to read as a gauge, not as a gauge sitting on a page.
+// Everything is authored against the coordinate system in clockFace.json. The
+// SVG scales to the physical panel, so these numbers are really proportions of
+// the dial. Tick coordinates are generated from that same config by
+// scripts/generate-clock-ticks.mjs; do not position tick lines by hand.
 //
 // Expect to re-tune the tick lengths, hand proportions and numeral size once
 // this is on the real display; those are the numbers that read differently at
 // 3 inches than they do on a desktop monitor.
 
-export const SIZE = 540
+import clockFace from './clockFace.json'
+
+export const SIZE = clockFace.size
 export const C = SIZE / 2
 
 // --- Dial ------------------------------------------------------------------
-export const DIAL_R = 252
+export const DIAL_R = clockFace.dialRadius
 
 // No bezel is drawn. The panel is already mounted in a real one, so a painted
 // chrome rim would read as a second bezel inside the first. Instead the clock's
@@ -29,18 +30,12 @@ export const DIAL_VIEW_BOX = `${C - DIAL_R} ${C - DIAL_R} ${DIAL_R * 2} ${DIAL_R
 // fifth minute gets a much longer and heavier one. The 12/3/6/9 positions get
 // the same long mark as the other fifths — the numerals sit inboard of them.
 //
-// The ring ends flush with the dial edge — TICK_OUTER_R is DIAL_R, not a number
-// short of it — so there is no dead band of blank dial outside the printing.
-// With no drawn bezel, that band would just read as the face not reaching the
-// glass. Tick lengths are given as lengths and the inner radii derived, so
-// moving the ring never silently restyles the marks.
-export const TICK_OUTER_R = DIAL_R
-export const TICK_MINUTE_LEN = 14
-export const TICK_HOUR_LEN = 30
-export const TICK_MINUTE_INNER_R = TICK_OUTER_R - TICK_MINUTE_LEN
-export const TICK_HOUR_INNER_R = TICK_OUTER_R - TICK_HOUR_LEN
-export const TICK_MINUTE_W = 3.2
-export const TICK_HOUR_W = 8.5
+// The original VDO printing is inset from the bezel. Keeping that dark outer
+// band is important: a flush ring makes the clock look oversized on the round
+// panel. Positions and lengths are emitted into generatedTickPositions.ts;
+// stroke widths remain here because the mini face applies a display-size boost.
+export const TICK_MINUTE_W = clockFace.ticks.minorWidth
+export const TICK_HOUR_W = clockFace.ticks.majorWidth
 
 // --- Numerals --------------------------------------------------------------
 // Radius of the numeral centres, not their baseline: the text is centred both
