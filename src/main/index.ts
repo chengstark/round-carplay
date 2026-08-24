@@ -10,6 +10,7 @@ import { CarplayService } from './carplay/CarplayService'
 import { WifiCameraService } from './wifi/WifiCameraService'
 import { GpsService } from './gps/GpsService'
 import { NetworkService } from './network/NetworkService'
+import { SystemUpdateService } from './update/SystemUpdateService'
 
 // Important: On Linux, enabling VA-API flags breaks WebCodecs’ hardware fallback path.
 // Requesting ‘prefer-hardware’ without a valid VA-API backend will immediately close the decoder.
@@ -93,6 +94,7 @@ const carplayService = new CarplayService()
 const wifiCameraService = new WifiCameraService()
 const gpsService = new GpsService()
 const networkService = new NetworkService()
+const systemUpdateService = new SystemUpdateService()
 ;(global as any).carplayService = carplayService
 
 app.on('before-quit', async (e) => {
@@ -330,6 +332,12 @@ app.whenReady().then(() => {
     networkService.connectWifi(ssid, password)
   )
   ipcMain.handle('network-get-ip-addresses', () => networkService.getIpAddresses())
+  ipcMain.handle('system-update-get-status', () => systemUpdateService.getStatus())
+  ipcMain.handle('system-update-start', event =>
+    systemUpdateService.update(status => {
+      if (!event.sender.isDestroyed()) event.sender.send('system-update-status', status)
+    })
+  )
 
   createWindow()
   gpsService.start().catch((error) => console.error('[GPS] Startup failed', error))

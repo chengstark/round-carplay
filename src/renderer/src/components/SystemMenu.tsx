@@ -11,8 +11,10 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import CloseIcon from '@mui/icons-material/Close'
 import LockIcon from '@mui/icons-material/Lock'
 import RefreshIcon from '@mui/icons-material/Refresh'
+import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt'
 import WifiIcon from '@mui/icons-material/Wifi'
 import type { IpAddress, WifiNetwork } from '../../../main/network/NetworkService'
+import type { SystemUpdateStatus } from '../../../main/update/SystemUpdateService'
 
 const BACKGROUND_PRESETS = ['#000000', '#1b1f23', '#17324d', '#556b5f', '#a0bacc', '#8b7355']
 
@@ -34,6 +36,10 @@ export default function SystemMenu({
   const [scanning, setScanning] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [message, setMessage] = useState('')
+  const [updateStatus, setUpdateStatus] = useState<SystemUpdateStatus>({
+    state: 'idle',
+    message: 'Check for application updates'
+  })
 
   const refreshNetworks = useCallback(async (): Promise<void> => {
     setScanning(true)
@@ -52,6 +58,31 @@ export default function SystemMenu({
   useEffect(() => {
     refreshNetworks()
   }, [refreshNetworks])
+
+  useEffect(() => {
+    let active = true
+    const removeUpdateListener = window.carplay.update.onStatus(status => {
+      if (active) setUpdateStatus(status)
+    })
+
+    window.carplay.update.getStatus()
+      .then(status => {
+        if (active) setUpdateStatus(status)
+      })
+      .catch(error => {
+        if (active) {
+          setUpdateStatus({
+            state: 'error',
+            message: error instanceof Error ? error.message : String(error)
+          })
+        }
+      })
+
+    return () => {
+      active = false
+      removeUpdateListener()
+    }
+  }, [])
 
   const selectNetwork = (network: WifiNetwork): void => {
     setSelectedNetwork(network)
@@ -77,6 +108,27 @@ export default function SystemMenu({
       setConnecting(false)
     }
   }
+
+  const startUpdate = async (): Promise<void> => {
+    setUpdateStatus({ state: 'pulling', message: 'Starting update…' })
+    try {
+      setUpdateStatus(await window.carplay.update.start())
+    } catch (error) {
+      setUpdateStatus({
+        state: 'error',
+        message: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
+  const updating = updateStatus.state === 'pulling' || updateStatus.state === 'building'
+  const updateColor = updateStatus.state === 'success'
+    ? '#69d58b'
+    : updateStatus.state === 'error'
+      ? '#ff8585'
+      : updateStatus.state === 'no-update'
+        ? '#8fc7ff'
+        : 'rgba(255,255,255,0.72)'
 
   const currentIp = ipAddresses.length
     ? ipAddresses.map(item => `${item.interface}: ${item.address}`).join('  ·  ')
@@ -262,6 +314,56 @@ export default function SystemMenu({
           {message}
         </Typography>
       )}
+
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          flex: '0 0 auto',
+          mt: 0.7,
+          pt: 0.7,
+          borderTop: '1px solid rgba(255,255,255,0.12)'
+        }}
+      >
+        <Button
+          variant="outlined"
+          size="small"
+          disabled={updating}
+          onClick={startUpdate}
+          startIcon={
+            updating
+              ? <CircularProgress size={15} color="inherit" />
+              : <SystemUpdateAltIcon fontSize="small" />
+          }
+          sx={{
+            flex: '0 0 auto',
+            minWidth: 96,
+            height: 32,
+            color: '#fff',
+            borderColor: 'rgba(255,255,255,0.4)'
+          }}
+        >
+          {updateStatus.state === 'pulling'
+            ? 'Pulling'
+            : updateStatus.state === 'building'
+              ? 'Building'
+              : 'Update'}
+        </Button>
+        <Typography
+          variant="caption"
+          title={updateStatus.message}
+          sx={{
+            flex: '1 1 auto',
+            maxHeight: 34,
+            overflow: 'hidden',
+            color: updateColor,
+            lineHeight: 1.2
+          }}
+        >
+          {updateStatus.message}
+        </Typography>
+      </Box>
 
       <Typography
         variant="caption"

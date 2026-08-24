@@ -6,6 +6,7 @@ import type {
   NetworkSnapshot,
   WifiConnectResult
 } from '../main/network/NetworkService'
+import type { SystemUpdateStatus } from '../main/update/SystemUpdateService'
 
 type ApiCallback<T = any> = (event: IpcRendererEvent, ...args: T[]) => void
 
@@ -111,6 +112,16 @@ export const api = {
     connectWifi: (ssid: string, password: string): Promise<WifiConnectResult> =>
       ipcRenderer.invoke('network-connect-wifi', ssid, password),
     getIpAddresses: (): Promise<IpAddress[]> => ipcRenderer.invoke('network-get-ip-addresses')
+  },
+
+  update: {
+    getStatus: (): Promise<SystemUpdateStatus> => ipcRenderer.invoke('system-update-get-status'),
+    start: (): Promise<SystemUpdateStatus> => ipcRenderer.invoke('system-update-start'),
+    onStatus: (callback: (status: SystemUpdateStatus) => void) => {
+      const listener = (_event: IpcRendererEvent, status: SystemUpdateStatus) => callback(status)
+      ipcRenderer.on('system-update-status', listener)
+      return () => ipcRenderer.removeListener('system-update-status', listener)
+    }
   },
 
   ipc: {
