@@ -10,6 +10,7 @@ import WifiCamera from './components/WifiCamera';
 import SystemMenu from './components/SystemMenu';
 import { Box, IconButton, Modal } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
+import SatelliteAltIcon from '@mui/icons-material/SatelliteAlt';
 import { useCarplayStore, useStatusStore } from "./store/store";
 import type { KeyCommand } from "./components/worker/types";
 import { updateCameras } from "./utils/cameraDetection";
@@ -338,6 +339,36 @@ function App() {
               }}
             >
               MPH
+            </span>
+            <span
+              aria-label={`${gpsState.satellites} satellites connected`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "min(0.55vw, 0.55vh)",
+                marginLeft: "min(0.8vw, 0.8vh)",
+                padding: "min(0.55vw, 0.55vh) min(1.15vw, 1.15vh)",
+                border: "1px solid currentColor",
+                borderRadius: 999,
+                color: gpsState.hasFix
+                  ? '#56d477'
+                  : gpsState.satellites > 0
+                    ? '#ffc857'
+                    : surroundTextColor,
+                backgroundColor: surroundTextColor === '#ffffff'
+                  ? "rgba(0,0,0,0.48)"
+                  : "rgba(255,255,255,0.52)",
+                opacity: gpsState.satellites > 0 ? 1 : 0.62,
+                fontSize: "min(2.5vw, 2.5vh)",
+                fontWeight: 700,
+                fontVariantNumeric: "tabular-nums",
+                lineHeight: 1,
+                textShadow: "0 1px 2px rgba(0,0,0,0.65)"
+              }}
+            >
+              <SatelliteAltIcon sx={{ fontSize: 'min(3vw, 3vh)' }} />
+              <span>{gpsState.satellites}</span>
             </span>
           </div>
         )}
