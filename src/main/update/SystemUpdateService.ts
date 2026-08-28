@@ -16,10 +16,13 @@ export type SystemUpdateStatus = {
   message: string
 }
 
-export type SystemRebootResult = {
+export type SystemPowerResult = {
   ok: boolean
   message: string
 }
+
+export type SystemRebootResult = SystemPowerResult
+export type SystemPowerOffResult = SystemPowerResult
 
 type StatusListener = (status: SystemUpdateStatus) => void
 
@@ -43,21 +46,32 @@ export class SystemUpdateService {
   }
 
   async reboot(): Promise<SystemRebootResult> {
+    return this.requestPowerAction('reboot', 'Reboot')
+  }
+
+  async powerOff(): Promise<SystemPowerOffResult> {
+    return this.requestPowerAction('poweroff', 'Power off')
+  }
+
+  private async requestPowerAction(
+    action: 'reboot' | 'poweroff',
+    label: string
+  ): Promise<SystemPowerResult> {
     if (process.platform !== 'linux') {
-      return { ok: false, message: 'Reboot is only available on the Raspberry Pi' }
+      return { ok: false, message: `${label} is only available on the Raspberry Pi` }
     }
 
     try {
-      await runCommand('systemctl', ['reboot'], process.cwd())
-      return { ok: true, message: 'Reboot requested' }
+      await runCommand('systemctl', [action], process.cwd())
+      return { ok: true, message: `${label} requested` }
     } catch (systemctlError) {
       try {
-        await runCommand('sudo', ['-n', 'systemctl', 'reboot'], process.cwd())
-        return { ok: true, message: 'Reboot requested' }
+        await runCommand('sudo', ['-n', 'systemctl', action], process.cwd())
+        return { ok: true, message: `${label} requested` }
       } catch (sudoError) {
         return {
           ok: false,
-          message: `Reboot failed: ${errorMessage(sudoError || systemctlError)}`
+          message: `${label} failed: ${errorMessage(sudoError || systemctlError)}`
         }
       }
     }

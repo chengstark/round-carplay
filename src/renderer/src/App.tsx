@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HashRouter as Router, Route, Routes } from "react-router-dom";
 import Settings from "./components/Settings";
 import Info from "./components/Info";
@@ -8,7 +8,18 @@ import Carplay from './components/Carplay';
 import Camera from './components/Camera';
 import WifiCamera from './components/WifiCamera';
 import SystemMenu from './components/SystemMenu';
-import { Box, IconButton, Modal } from '@mui/material';
+import {
+  Box,
+  Button,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  IconButton,
+  Modal
+} from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SatelliteAltIcon from '@mui/icons-material/SatelliteAlt';
 import { useCarplayStore, useStatusStore } from "./store/store";
@@ -31,6 +42,7 @@ const style = {
 };
 
 const DEFAULT_BACKGROUND = '#000000';
+const MENU_LONG_PRESS_MS = 3000;
 
 // The CarPlay square is a plain block in the circle's top-left corner, nudged into the
 // middle by a translate of SQUARE_SHIFT_PCT — a percentage of the square's *own* size, so
@@ -107,11 +119,16 @@ function App() {
   const [clockMode, setClockMode] = useState(false);
   const [wifiCameraMode, setWifiCameraMode] = useState(false);
   const [systemMenuOpen, setSystemMenuOpen] = useState(false);
+  const [powerDialogOpen, setPowerDialogOpen] = useState(false);
+  const [powerAction, setPowerAction] = useState<'restart' | 'poweroff' | null>(null);
+  const [powerError, setPowerError] = useState('');
   const [showGpsSpeed, setShowGpsSpeed] = useState(true);
   const [gpsState, setGpsState] = useState<GpsState>(INITIAL_GPS_STATE);
   const [receivingVideo, setReceivingVideo] = useState(false);
   const [commandCounter, setCommandCounter] = useState(0);
   const [keyCommand, setKeyCommand] = useState('');
+  const menuHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const menuLongPressTriggeredRef = useRef(false);
 
   const reverse = useStatusStore(state => state.reverse);
   const setReverse = useStatusStore(state => state.setReverse);
@@ -130,6 +147,51 @@ function App() {
     setSystemMenuOpen(true);
   };
 
+  const clearMenuHold = () => {
+    if (menuHoldTimerRef.current) {
+      clearTimeout(menuHoldTimerRef.current);
+      menuHoldTimerRef.current = null;
+    }
+  };
+
+  const startMenuHold = () => {
+    clearMenuHold();
+    menuLongPressTriggeredRef.current = false;
+    menuHoldTimerRef.current = setTimeout(() => {
+      menuHoldTimerRef.current = null;
+      menuLongPressTriggeredRef.current = true;
+      setWifiCameraMode(false);
+      setSystemMenuOpen(false);
+      setPowerError('');
+      setPowerDialogOpen(true);
+    }, MENU_LONG_PRESS_MS);
+  };
+
+  const handleMenuClick = () => {
+    if (menuLongPressTriggeredRef.current) {
+      menuLongPressTriggeredRef.current = false;
+      return;
+    }
+    openSystemMenu();
+  };
+
+  const requestPowerAction = async (action: 'restart' | 'poweroff') => {
+    setPowerAction(action);
+    setPowerError('');
+    try {
+      const result = action === 'restart'
+        ? await window.carplay.update.reboot()
+        : await window.carplay.update.powerOff();
+      if (!result.ok) {
+        setPowerError(result.message);
+        setPowerAction(null);
+      }
+    } catch (error) {
+      setPowerError(error instanceof Error ? error.message : String(error));
+      setPowerAction(null);
+    }
+  };
+
   const changeBackgroundColor = (color: string) => {
     if (settings) saveSettings({ ...settings, backgroundColor: color });
   };
@@ -142,6 +204,8 @@ function App() {
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [settings]);
+
+  useEffect(() => () => clearMenuHold(), []);
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (!settings) return;
@@ -425,9 +489,14 @@ function App() {
             the central CarPlay square. Closing it reveals the still-mounted
             CarPlay surface immediately. */}
         <IconButton
-          aria-label="Open system menu"
-          title="System menu"
-          onClick={openSystemMenu}
+          aria-label="Open system menu; hold for three seconds for power options"
+          title="System menu · hold 3 seconds for power"
+          onClick={handleMenuClick}
+          onPointerDown={startMenuHold}
+          onPointerUp={clearMenuHold}
+          onPointerCancel={clearMenuHold}
+          onPointerLeave={clearMenuHold}
+          onContextMenu={event => event.preventDefault()}
           sx={{
             position: 'absolute',
             top: '4%',
@@ -446,6 +515,52 @@ function App() {
         >
           <MenuIcon sx={{ fontSize: 'min(4.6vw, 4.6vh)' }} />
         </IconButton>
+
+        <Dialog
+          open={powerDialogOpen}
+          onClose={() => {
+            if (!powerAction) setPowerDialogOpen(false);
+          }}
+          aria-labelledby="power-options-title"
+          slotProps={{
+            paper: {
+              sx: { width: '72%', maxWidth: 320, m: 0, borderRadius: 3 }
+            }
+          }}
+        >
+          <DialogTitle id="power-options-title">Power options</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Restart or safely turn off the Raspberry Pi?
+            </DialogContentText>
+            {powerError && (
+              <DialogContentText color="error" sx={{ mt: 1 }}>
+                {powerError}
+              </DialogContentText>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button disabled={powerAction != null} onClick={() => setPowerDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={powerAction != null}
+              onClick={() => requestPowerAction('restart')}
+            >
+              {powerAction === 'restart' ? <CircularProgress size={18} /> : 'Restart'}
+            </Button>
+            <Button
+              color="error"
+              variant="contained"
+              disabled={powerAction != null}
+              onClick={() => requestPowerAction('poweroff')}
+            >
+              {powerAction === 'poweroff'
+                ? <CircularProgress size={18} color="inherit" />
+                : 'Power off'}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Clock button: the whole crescent left of CarPlay, drawn as a visible
             shape. Double-tap to open, so a hand brushing the panel can't swap

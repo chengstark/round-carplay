@@ -6,7 +6,11 @@ import type {
   NetworkSnapshot,
   WifiConnectResult
 } from '../main/network/NetworkService'
-import type { SystemRebootResult, SystemUpdateStatus } from '../main/update/SystemUpdateService'
+import type {
+  SystemPowerOffResult,
+  SystemRebootResult,
+  SystemUpdateStatus
+} from '../main/update/SystemUpdateService'
 
 type ApiCallback<T = any> = (event: IpcRendererEvent, ...args: T[]) => void
 
@@ -118,6 +122,7 @@ export const api = {
     getStatus: (): Promise<SystemUpdateStatus> => ipcRenderer.invoke('system-update-get-status'),
     start: (): Promise<SystemUpdateStatus> => ipcRenderer.invoke('system-update-start'),
     reboot: (): Promise<SystemRebootResult> => ipcRenderer.invoke('system-update-reboot'),
+    powerOff: (): Promise<SystemPowerOffResult> => ipcRenderer.invoke('system-power-off'),
     onStatus: (callback: (status: SystemUpdateStatus) => void) => {
       const listener = (_event: IpcRendererEvent, status: SystemUpdateStatus) => callback(status)
       ipcRenderer.on('system-update-status', listener)

@@ -342,6 +342,7 @@ app.whenReady().then(() => {
     })
   )
   ipcMain.handle('system-update-reboot', () => systemUpdateService.reboot())
+  ipcMain.handle('system-power-off', () => systemUpdateService.powerOff())
 
   createWindow()
   gpsService.start().catch((error) => console.error('[GPS] Startup failed', error))
