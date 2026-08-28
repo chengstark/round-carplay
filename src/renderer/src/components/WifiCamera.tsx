@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { IconButton, Slider, Typography } from '@mui/material'
+import AddIcon from '@mui/icons-material/Add'
 import CheckIcon from '@mui/icons-material/Check'
+import CloseIcon from '@mui/icons-material/Close'
+import RemoveIcon from '@mui/icons-material/Remove'
 import TuneIcon from '@mui/icons-material/Tune'
 import type { WifiCameraRotation } from '../../../main/Globals'
 import ParkingGuides from './ParkingGuides'
@@ -14,10 +17,12 @@ type CameraStatus = {
  * separate and continues to back the existing /camera route. */
 export default function WifiCamera({
   rotation,
-  onRotationSave
+  onRotationSave,
+  onExit
 }: {
   rotation: WifiCameraRotation
   onRotationSave: (rotation: WifiCameraRotation) => void
+  onExit: () => void
 }): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rotationRef = useRef<WifiCameraRotation>(rotation)
@@ -37,7 +42,8 @@ export default function WifiCamera({
   }, [rotation, calibrating])
 
   const updateDraftRotation = (value: number): void => {
-    const normalized = Math.min(359, Math.max(0, Math.round(value)))
+    const rounded = Math.round(value)
+    const normalized = ((rounded % 360) + 360) % 360
     rotationRef.current = normalized
     setDraftRotation(normalized)
   }
@@ -91,16 +97,15 @@ export default function WifiCamera({
         if (context) {
           const currentRotation = rotationRef.current
           const radians = (currentRotation * Math.PI) / 180
-          const cosine = Math.abs(Math.cos(radians))
-          const sine = Math.abs(Math.sin(radians))
 
-          // Scale the rotated source far enough that every corner of the
-          // square display remains covered. Using only the rotated bounding
-          // box would leave black triangles at non-right-angle rotations.
-          const scale = Math.max(
-            (width * cosine + height * sine) / bitmap.width,
-            (width * sine + height * cosine) / bitmap.height
-          )
+          // Keep the complete rectangular frame visible inside the circular
+          // display. A centred rectangle is fully inscribed when its diagonal
+          // equals the circle's diameter. Rotation does not change that
+          // diagonal, so this is also the largest crop-free scale at every
+          // calibration angle.
+          const displayDiameter = Math.min(width, height)
+          const sourceDiagonal = Math.hypot(bitmap.width, bitmap.height)
+          const scale = displayDiameter / sourceDiagonal
           const drawWidth = bitmap.width * scale
           const drawHeight = bitmap.height * scale
 
@@ -163,6 +168,27 @@ export default function WifiCamera({
       />
       <ParkingGuides />
 
+      <IconButton
+        aria-label="Exit Wi-Fi backup camera"
+        title="Exit camera"
+        onClick={onExit}
+        sx={{
+          position: 'absolute',
+          top: '17%',
+          left: '20%',
+          zIndex: 6,
+          width: 52,
+          height: 52,
+          color: '#fff',
+          border: '1px solid rgba(255,255,255,0.65)',
+          backgroundColor: 'rgba(0,0,0,0.72)',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.55)',
+          '&:hover': { backgroundColor: 'rgba(0,0,0,0.72)' }
+        }}
+      >
+        <CloseIcon />
+      </IconButton>
+
       {!hasFrame && (
         <div
           style={{
@@ -224,7 +250,7 @@ export default function WifiCamera({
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 4,
-            width: '66%',
+            width: '72%',
             padding: '14px 22px 8px',
             borderRadius: 14,
             color: '#fff',
@@ -235,29 +261,68 @@ export default function WifiCamera({
           <Typography variant="subtitle2" align="center">
             Rotation {draftRotation}°
           </Typography>
-          <Slider
-            aria-label="Wi-Fi camera rotation"
-            value={draftRotation}
-            min={0}
-            max={359}
-            step={1}
-            marks={[
-              { value: 0, label: '0°' },
-              { value: 90, label: '90°' },
-              { value: 180, label: '180°' },
-              { value: 270, label: '270°' },
-              { value: 359, label: '359°' }
-            ]}
-            valueLabelDisplay="auto"
-            valueLabelFormat={(value) => `${value}°`}
-            onChange={(_, value) => {
-              if (typeof value === 'number') updateDraftRotation(value)
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12
             }}
-            sx={{
-              color: '#e6e3db',
-              '& .MuiSlider-markLabel': { color: 'rgba(255,255,255,0.78)' }
-            }}
-          />
+          >
+            <IconButton
+              aria-label="Rotate camera one degree counter-clockwise"
+              title="Rotate −1°"
+              onClick={() => updateDraftRotation(draftRotation - 1)}
+              sx={{
+                flex: '0 0 auto',
+                width: 48,
+                height: 48,
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.5)',
+                backgroundColor: 'rgba(255,255,255,0.1)'
+              }}
+            >
+              <RemoveIcon />
+            </IconButton>
+            <Slider
+              aria-label="Wi-Fi camera rotation"
+              value={draftRotation}
+              min={0}
+              max={359}
+              step={1}
+              marks={[
+                { value: 0, label: '0°' },
+                { value: 90, label: '90°' },
+                { value: 180, label: '180°' },
+                { value: 270, label: '270°' },
+                { value: 359, label: '359°' }
+              ]}
+              valueLabelDisplay="auto"
+              valueLabelFormat={(value) => `${value}°`}
+              onChange={(_, value) => {
+                if (typeof value === 'number') updateDraftRotation(value)
+              }}
+              sx={{
+                minWidth: 0,
+                color: '#e6e3db',
+                '& .MuiSlider-markLabel': { color: 'rgba(255,255,255,0.78)' }
+              }}
+            />
+            <IconButton
+              aria-label="Rotate camera one degree clockwise"
+              title="Rotate +1°"
+              onClick={() => updateDraftRotation(draftRotation + 1)}
+              sx={{
+                flex: '0 0 auto',
+                width: 48,
+                height: 48,
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.5)',
+                backgroundColor: 'rgba(255,255,255,0.1)'
+              }}
+            >
+              <AddIcon />
+            </IconButton>
+          </div>
         </div>
       )}
     </div>

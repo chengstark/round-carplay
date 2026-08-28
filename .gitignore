@@ -1,24 +1,23 @@
-<<<<<<< HEAD
-#directories
-bower_components
-node_modules
-dist
-build
-.idea
+# Dependencies
+node_modules/
+bower_components/
 
-#files
+# Build output
+dist/
+out/
+build/
+*.AppImage
 *.tgz
-*.log
 *.apk
-.idea/workspace.xml
 *.xml
 
-# Hide OS X stuff
-.DS_Store
+# npm creates this locally because this project does not track a lockfile
+package-lock.json
 
-=======
-node_modules
-dist
-out
-*.log*
->>>>>>> origin/v4
+# Logs
+*.log
+*.log.*
+
+# IDE and OS files
+.idea/
+.DS_Store

@@ -30,10 +30,14 @@ The right-side crescent button opens the integrated JieLi AC792x/CC31 Wi-Fi
 backup camera. Double-tap the button to open or close the feed. The host running
 Round CarPlay must be connected to the camera's `W-Car...` Wi-Fi network; the
 application controls `192.168.1.1:3333` and receives MJPEG on UDP port `2224`.
-The Settings screen can rotate the Wi-Fi feed continuously from `0°` through
-`359°` in one-degree steps; the selection is saved across restarts.
-For visual calibration, tap the adjustment button at the top center of the live
-feed, move the slider, then tap the same button again to save and dismiss it.
+The complete 16:9 camera image is displayed as the largest rectangle that fits
+inside the circular screen, so none of the source frame is cropped. The camera
+can be rotated continuously from `0°` through `359°`; the slider and `−1°` /
+`+1°` buttons support coarse and fine adjustment, and the selection is saved
+across restarts. For visual calibration, tap the adjustment button at the top
+center of the live feed, adjust the angle, then tap the same button again to
+save. While the camera is open it covers the clock and surround controls and
+provides a dedicated exit button at the upper left.
 
 The Camera tab continues to support ordinary USB cameras through the browser
 media-device API. The standalone low-latency SDL diagnostic viewer remains in

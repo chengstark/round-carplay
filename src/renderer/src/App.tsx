@@ -472,7 +472,7 @@ function App() {
             style={{
               position: "absolute",
               inset: 0,
-              zIndex: 9,
+              zIndex: 30,
               touchAction: "none"
             }}
           >
@@ -481,6 +481,7 @@ function App() {
               onRotationSave={rotation => {
                 if (settings) saveSettings({ ...settings, wifiCameraRotation: rotation });
               }}
+              onExit={() => setWifiCameraMode(false)}
             />
           </div>
         )}
