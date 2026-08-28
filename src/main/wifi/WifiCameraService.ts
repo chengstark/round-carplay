@@ -84,7 +84,7 @@ export class WifiCameraService {
       if (!this.running) throw new Error('Camera start cancelled')
       this.sendTopic('OPEN_RT_STREAM', {
         op: 'PUT',
-        param: { format: '0', w: '640', h: '480', fps: '25' }
+        param: { format: '0', w: '1280', h: '720', fps: '25' }
       })
 
       this.heartbeat = setInterval(() => {

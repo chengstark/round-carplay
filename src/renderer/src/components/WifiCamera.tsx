@@ -98,14 +98,16 @@ export default function WifiCamera({
           const currentRotation = rotationRef.current
           const radians = (currentRotation * Math.PI) / 180
 
-          // Keep the complete rectangular frame visible inside the circular
-          // display. A centred rectangle is fully inscribed when its diagonal
-          // equals the circle's diameter. Rotation does not change that
-          // diagonal, so this is also the largest crop-free scale at every
-          // calibration angle.
-          const displayDiameter = Math.min(width, height)
-          const sourceDiagonal = Math.hypot(bitmap.width, bitmap.height)
-          const scale = displayDiameter / sourceDiagonal
+          // The canvas is a fixed 16:9 viewport. Rotate only the camera image,
+          // then scale it far enough to cover the viewport at every angle.
+          // Canvas clipping keeps the visible camera surface rectangular while
+          // avoiding empty triangles around a corrected/rotated image.
+          const cosine = Math.abs(Math.cos(radians))
+          const sine = Math.abs(Math.sin(radians))
+          const scale = Math.max(
+            (cosine * width + sine * height) / bitmap.width,
+            (sine * width + cosine * height) / bitmap.height
+          )
           const drawWidth = bitmap.width * scale
           const drawHeight = bitmap.height * scale
 
@@ -161,12 +163,54 @@ export default function WifiCamera({
         background: '#000'
       }}
     >
-      <canvas
-        ref={canvasRef}
-        aria-label="Wi-Fi backup camera"
-        style={{ width: '100%', height: '100%', display: 'block' }}
-      />
-      <ParkingGuides />
+      <div
+        style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          width: '87%',
+          aspectRatio: '16 / 9',
+          transform: 'translate(-50%, -50%)',
+          overflow: 'hidden',
+          background: '#000'
+        }}
+      >
+        <canvas
+          ref={canvasRef}
+          aria-label="Wi-Fi backup camera"
+          style={{ width: '100%', height: '100%', display: 'block' }}
+        />
+        <ParkingGuides />
+
+        {!hasFrame && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '12%',
+              textAlign: 'center',
+              color: '#fff',
+              background: 'rgba(0,0,0,0.72)'
+            }}
+          >
+            <Typography variant="h6">
+              {status.state === 'error' ? 'Wi-Fi Camera Unavailable' : 'Wi-Fi Camera'}
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
+              {status.message}
+            </Typography>
+            {status.state === 'error' && (
+              <Typography variant="caption" sx={{ mt: 1.5, opacity: 0.65 }}>
+                Connect this device to the W-Car Wi-Fi network.
+              </Typography>
+            )}
+          </div>
+        )}
+      </div>
 
       <IconButton
         aria-label="Exit Wi-Fi backup camera"
@@ -188,35 +232,6 @@ export default function WifiCamera({
       >
         <CloseIcon />
       </IconButton>
-
-      {!hasFrame && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '18%',
-            textAlign: 'center',
-            color: '#fff',
-            background: 'rgba(0,0,0,0.72)'
-          }}
-        >
-          <Typography variant="h6">
-            {status.state === 'error' ? 'Wi-Fi Camera Unavailable' : 'Wi-Fi Camera'}
-          </Typography>
-          <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
-            {status.message}
-          </Typography>
-          {status.state === 'error' && (
-            <Typography variant="caption" sx={{ mt: 1.5, opacity: 0.65 }}>
-              Connect this device to the W-Car Wi-Fi network.
-            </Typography>
-          )}
-        </div>
-      )}
 
       <IconButton
         aria-label={calibrating ? 'Save camera rotation' : 'Adjust camera rotation'}

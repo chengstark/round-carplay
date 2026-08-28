@@ -159,6 +159,7 @@ function loadConfig(): ExtraConfig {
     camera: '',
     backgroundColor: '#000000',
     wifiCameraRotation: 0,
+    gpsSmoothing: 0.55,
     microphone: '',
     nightMode: true,
     audioVolume: 1.0,
@@ -173,6 +174,7 @@ function loadConfig(): ExtraConfig {
   }
   merged.backgroundColor = normalizeBackgroundColor(merged.backgroundColor)
   merged.wifiCameraRotation = normalizeWifiCameraRotation(merged.wifiCameraRotation)
+  merged.gpsSmoothing = normalizeGpsSmoothing(merged.gpsSmoothing)
 
   const needWrite = !existsSync(configPath) || JSON.stringify(fileConfig) !== JSON.stringify(merged)
 
@@ -185,6 +187,7 @@ function loadConfig(): ExtraConfig {
 }
 
 config = loadConfig()
+gpsService.setSmoothing(config.gpsSmoothing)
 
 // Window
 function createWindow(): void {
@@ -338,6 +341,7 @@ app.whenReady().then(() => {
       if (!event.sender.isDestroyed()) event.sender.send('system-update-status', status)
     })
   )
+  ipcMain.handle('system-update-reboot', () => systemUpdateService.reboot())
 
   createWindow()
   gpsService.start().catch((error) => console.error('[GPS] Startup failed', error))
@@ -368,14 +372,17 @@ function saveSettings(settings: ExtraConfig) {
         packetMax: +settings.packetMax,
         mediaDelay: +settings.mediaDelay,
         backgroundColor: normalizeBackgroundColor(settings.backgroundColor),
-        wifiCameraRotation: normalizeWifiCameraRotation(settings.wifiCameraRotation)
+        wifiCameraRotation: normalizeWifiCameraRotation(settings.wifiCameraRotation),
+        gpsSmoothing: normalizeGpsSmoothing(settings.gpsSmoothing)
       },
       null,
       2
     )
   )
 
-  socket.config = settings
+  const gpsSmoothing = normalizeGpsSmoothing(settings.gpsSmoothing)
+  gpsService.setSmoothing(gpsSmoothing)
+  socket.config = { ...settings, gpsSmoothing }
   socket.sendSettings()
 
   if (!mainWindow) return
@@ -394,6 +401,12 @@ function normalizeWifiCameraRotation(value: unknown): number {
   const rotation = Number(value)
   if (!Number.isFinite(rotation)) return 0
   return ((rotation % 360) + 360) % 360
+}
+
+function normalizeGpsSmoothing(value: unknown): number {
+  const smoothing = Number(value)
+  if (!Number.isFinite(smoothing)) return 0.55
+  return Math.min(0.9, Math.max(0, smoothing))
 }
 
 function normalizeBackgroundColor(value: unknown): string {

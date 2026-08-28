@@ -107,7 +107,7 @@ function App() {
   const [clockMode, setClockMode] = useState(false);
   const [wifiCameraMode, setWifiCameraMode] = useState(false);
   const [systemMenuOpen, setSystemMenuOpen] = useState(false);
-  const [showGpsSpeed, setShowGpsSpeed] = useState(false);
+  const [showGpsSpeed, setShowGpsSpeed] = useState(true);
   const [gpsState, setGpsState] = useState<GpsState>(INITIAL_GPS_STATE);
   const [receivingVideo, setReceivingVideo] = useState(false);
   const [commandCounter, setCommandCounter] = useState(0);
@@ -132,6 +132,10 @@ function App() {
 
   const changeBackgroundColor = (color: string) => {
     if (settings) saveSettings({ ...settings, backgroundColor: color });
+  };
+
+  const changeGpsSmoothing = (gpsSmoothing: number) => {
+    if (settings) saveSettings({ ...settings, gpsSmoothing });
   };
 
   useEffect(() => {
@@ -264,6 +268,8 @@ function App() {
               <SystemMenu
                 backgroundColor={backgroundColor}
                 onBackgroundColorChange={changeBackgroundColor}
+                gpsSmoothing={settings?.gpsSmoothing ?? 0.55}
+                onGpsSmoothingChange={changeGpsSmoothing}
                 onClose={() => setSystemMenuOpen(false)}
               />
             )}

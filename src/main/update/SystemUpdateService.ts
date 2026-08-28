@@ -16,6 +16,11 @@ export type SystemUpdateStatus = {
   message: string
 }
 
+export type SystemRebootResult = {
+  ok: boolean
+  message: string
+}
+
 type StatusListener = (status: SystemUpdateStatus) => void
 
 const MAX_COMMAND_OUTPUT = 12_000
@@ -35,6 +40,27 @@ export class SystemUpdateService {
 
   getStatus(): SystemUpdateStatus {
     return { ...this.status }
+  }
+
+  async reboot(): Promise<SystemRebootResult> {
+    if (process.platform !== 'linux') {
+      return { ok: false, message: 'Reboot is only available on the Raspberry Pi' }
+    }
+
+    try {
+      await runCommand('systemctl', ['reboot'], process.cwd())
+      return { ok: true, message: 'Reboot requested' }
+    } catch (systemctlError) {
+      try {
+        await runCommand('sudo', ['-n', 'systemctl', 'reboot'], process.cwd())
+        return { ok: true, message: 'Reboot requested' }
+      } catch (sudoError) {
+        return {
+          ok: false,
+          message: `Reboot failed: ${errorMessage(sudoError || systemctlError)}`
+        }
+      }
+    }
   }
 
   async update(onStatus: StatusListener): Promise<SystemUpdateStatus> {

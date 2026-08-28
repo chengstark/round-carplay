@@ -3,7 +3,13 @@ import {
   Box,
   Button,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   IconButton,
+  Slider,
   TextField,
   Typography
 } from '@mui/material'
@@ -21,12 +27,16 @@ const BACKGROUND_PRESETS = ['#000000', '#1b1f23', '#17324d', '#556b5f', '#a0bacc
 type SystemMenuProps = {
   backgroundColor: string
   onBackgroundColorChange: (color: string) => void
+  gpsSmoothing: number
+  onGpsSmoothingChange: (smoothing: number) => void
   onClose: () => void
 }
 
 export default function SystemMenu({
   backgroundColor,
   onBackgroundColorChange,
+  gpsSmoothing,
+  onGpsSmoothingChange,
   onClose
 }: SystemMenuProps): React.JSX.Element {
   const [networks, setNetworks] = useState<WifiNetwork[]>([])
@@ -40,6 +50,13 @@ export default function SystemMenu({
     state: 'idle',
     message: 'Check for application updates'
   })
+  const [rebootConfirmationOpen, setRebootConfirmationOpen] = useState(false)
+  const [rebooting, setRebooting] = useState(false)
+  const [gpsSmoothingDraft, setGpsSmoothingDraft] = useState(gpsSmoothing)
+
+  useEffect(() => {
+    setGpsSmoothingDraft(gpsSmoothing)
+  }, [gpsSmoothing])
 
   const refreshNetworks = useCallback(async (): Promise<void> => {
     setScanning(true)
@@ -118,6 +135,24 @@ export default function SystemMenu({
         state: 'error',
         message: error instanceof Error ? error.message : String(error)
       })
+    }
+  }
+
+  const reboot = async (): Promise<void> => {
+    setRebootConfirmationOpen(false)
+    setRebooting(true)
+    try {
+      const result = await window.carplay.update.reboot()
+      if (!result.ok) {
+        setUpdateStatus({ state: 'error', message: result.message })
+        setRebooting(false)
+      }
+    } catch (error) {
+      setUpdateStatus({
+        state: 'error',
+        message: error instanceof Error ? error.message : String(error)
+      })
+      setRebooting(false)
     }
   }
 
@@ -200,6 +235,34 @@ export default function SystemMenu({
             style={{ width: 42, height: 42, margin: -6, padding: 0, border: 0 }}
           />
         </label>
+      </Box>
+
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.7 }}>
+        <Typography variant="caption" sx={{ flex: '0 0 auto', opacity: 0.72 }}>
+          GPS smoothing
+        </Typography>
+        <Slider
+          aria-label="GPS speed smoothing"
+          value={Math.round(gpsSmoothingDraft * 100)}
+          min={0}
+          max={90}
+          step={5}
+          valueLabelDisplay="auto"
+          valueLabelFormat={value => `${value}%`}
+          onChange={(_, value) => {
+            if (typeof value === 'number') setGpsSmoothingDraft(value / 100)
+          }}
+          onChangeCommitted={(_, value) => {
+            if (typeof value === 'number') onGpsSmoothingChange(value / 100)
+          }}
+          sx={{ minWidth: 0, py: 0.5, color: '#e6e3db' }}
+        />
+        <Typography
+          variant="caption"
+          sx={{ minWidth: 30, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+        >
+          {Math.round(gpsSmoothingDraft * 100)}%
+        </Typography>
       </Box>
 
       <Box sx={{ display: 'flex', alignItems: 'center', minHeight: 32 }}>
@@ -363,6 +426,17 @@ export default function SystemMenu({
         >
           {updateStatus.message}
         </Typography>
+        {updateStatus.state === 'success' && (
+          <Button
+            variant="contained"
+            size="small"
+            disabled={rebooting}
+            onClick={() => setRebootConfirmationOpen(true)}
+            sx={{ flex: '0 0 auto', minWidth: 82, height: 32 }}
+          >
+            {rebooting ? <CircularProgress size={15} color="inherit" /> : 'Reboot'}
+          </Button>
+        )}
       </Box>
 
       <Typography
@@ -381,6 +455,25 @@ export default function SystemMenu({
       >
         IP · {currentIp}
       </Typography>
+
+      <Dialog
+        open={rebootConfirmationOpen}
+        onClose={() => setRebootConfirmationOpen(false)}
+        aria-labelledby="reboot-confirmation-title"
+      >
+        <DialogTitle id="reboot-confirmation-title">Reboot now?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            The update finished building. Reboot the Raspberry Pi to start the new version.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRebootConfirmationOpen(false)}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={reboot} autoFocus>
+            Reboot
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

@@ -5,6 +5,7 @@ export type ExtraConfig = DongleConfig & {
   camera: string,
   backgroundColor: string,
   wifiCameraRotation: WifiCameraRotation,
+  gpsSmoothing: number,
   microphone: string,
   bindings: KeyBindings,
   audioVolume: number;

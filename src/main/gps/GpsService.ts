@@ -6,7 +6,7 @@ const DEFAULT_DEVICE = '/dev/serial0'
 const GPS_BAUD = '9600'
 const KNOTS_TO_MPH = 1.150779448
 const SPEED_DEAD_ZONE_MPH = 0.75
-const SMOOTHING_ALPHA = 0.45
+const DEFAULT_SMOOTHING = 0.55
 const SIGNAL_TIMEOUT_MS = 5_000
 
 export type GpsState = {
@@ -37,6 +37,7 @@ export class GpsService {
   private lastSentenceAt = 0
   private signalTimer: NodeJS.Timeout | null = null
   private smoothedSpeedMph: number | null = null
+  private smoothing = DEFAULT_SMOOTHING
   private state: GpsState = {
     status: process.platform === 'linux' ? 'connecting' : 'unavailable',
     hasFix: false,
@@ -57,6 +58,10 @@ export class GpsService {
 
   getState(): GpsState {
     return { ...this.state }
+  }
+
+  setSmoothing(value: number): void {
+    this.smoothing = normalizeSmoothing(value)
   }
 
   async start(): Promise<void> {
@@ -144,7 +149,7 @@ export class GpsService {
         this.smoothedSpeedMph =
           this.smoothedSpeedMph == null
             ? speedMph
-            : SMOOTHING_ALPHA * speedMph + (1 - SMOOTHING_ALPHA) * this.smoothedSpeedMph
+            : (1 - this.smoothing) * speedMph + this.smoothing * this.smoothedSpeedMph
         next.speedMph = this.smoothedSpeedMph
         next.message = 'GPS fix acquired'
       }
@@ -182,6 +187,12 @@ export class GpsService {
       this.renderer.send('gps-state', this.getState())
     }
   }
+}
+
+function normalizeSmoothing(value: unknown): number {
+  const smoothing = Number(value)
+  if (!Number.isFinite(smoothing)) return DEFAULT_SMOOTHING
+  return Math.min(0.9, Math.max(0, smoothing))
 }
 
 export function parseNmeaSentence(line: string): ParsedNmea | null {
