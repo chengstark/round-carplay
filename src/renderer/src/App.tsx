@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { HashRouter as Router, Route, Routes } from "react-router-dom";
 import Settings from "./components/Settings";
 import Info from "./components/Info";
@@ -21,6 +21,7 @@ import {
   Modal
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
+import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import SatelliteAltIcon from '@mui/icons-material/SatelliteAlt';
 import { useCarplayStore, useStatusStore } from "./store/store";
 import type { KeyCommand } from "./components/worker/types";
@@ -42,7 +43,6 @@ const style = {
 };
 
 const DEFAULT_BACKGROUND = '#000000';
-const MENU_LONG_PRESS_MS = 3000;
 
 // The CarPlay square is a plain block in the circle's top-left corner, nudged into the
 // middle by a translate of SQUARE_SHIFT_PCT — a percentage of the square's *own* size, so
@@ -120,6 +120,7 @@ function App() {
   const [wifiCameraMode, setWifiCameraMode] = useState(false);
   const [systemMenuOpen, setSystemMenuOpen] = useState(false);
   const [powerDialogOpen, setPowerDialogOpen] = useState(false);
+  const [pendingPowerAction, setPendingPowerAction] = useState<'restart' | 'poweroff' | null>(null);
   const [powerAction, setPowerAction] = useState<'restart' | 'poweroff' | null>(null);
   const [powerError, setPowerError] = useState('');
   const [showGpsSpeed, setShowGpsSpeed] = useState(true);
@@ -127,8 +128,6 @@ function App() {
   const [receivingVideo, setReceivingVideo] = useState(false);
   const [commandCounter, setCommandCounter] = useState(0);
   const [keyCommand, setKeyCommand] = useState('');
-  const menuHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const menuLongPressTriggeredRef = useRef(false);
 
   const reverse = useStatusStore(state => state.reverse);
   const setReverse = useStatusStore(state => state.setReverse);
@@ -147,32 +146,12 @@ function App() {
     setSystemMenuOpen(true);
   };
 
-  const clearMenuHold = () => {
-    if (menuHoldTimerRef.current) {
-      clearTimeout(menuHoldTimerRef.current);
-      menuHoldTimerRef.current = null;
-    }
-  };
-
-  const startMenuHold = () => {
-    clearMenuHold();
-    menuLongPressTriggeredRef.current = false;
-    menuHoldTimerRef.current = setTimeout(() => {
-      menuHoldTimerRef.current = null;
-      menuLongPressTriggeredRef.current = true;
-      setWifiCameraMode(false);
-      setSystemMenuOpen(false);
-      setPowerError('');
-      setPowerDialogOpen(true);
-    }, MENU_LONG_PRESS_MS);
-  };
-
-  const handleMenuClick = () => {
-    if (menuLongPressTriggeredRef.current) {
-      menuLongPressTriggeredRef.current = false;
-      return;
-    }
-    openSystemMenu();
+  const openPowerDialog = () => {
+    setWifiCameraMode(false);
+    setSystemMenuOpen(false);
+    setPendingPowerAction(null);
+    setPowerError('');
+    setPowerDialogOpen(true);
   };
 
   const requestPowerAction = async (action: 'restart' | 'poweroff') => {
@@ -204,8 +183,6 @@ function App() {
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [settings]);
-
-  useEffect(() => () => clearMenuHold(), []);
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (!settings) return;
@@ -485,18 +462,36 @@ function App() {
           })}
         </div>
 
+        <IconButton
+          aria-label="Open power options"
+          title="Power options"
+          onClick={openPowerDialog}
+          sx={{
+            position: 'absolute',
+            top: '4%',
+            left: '27%',
+            zIndex: 12,
+            width: 'min(8vw, 8vh)',
+            height: 'min(8vw, 8vh)',
+            minWidth: 36,
+            minHeight: 36,
+            color: '#fff',
+            border: '1px solid rgba(255,255,255,0.55)',
+            backgroundColor: 'rgba(0,0,0,0.68)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.45)',
+            '&:hover': { backgroundColor: 'rgba(0,0,0,0.68)' }
+          }}
+        >
+          <PowerSettingsNewIcon sx={{ fontSize: 'min(4.6vw, 4.6vh)' }} />
+        </IconButton>
+
         {/* System menu lives in the surround, while its panel replaces only
             the central CarPlay square. Closing it reveals the still-mounted
             CarPlay surface immediately. */}
         <IconButton
-          aria-label="Open system menu; hold for three seconds for power options"
-          title="System menu · hold 3 seconds for power"
-          onClick={handleMenuClick}
-          onPointerDown={startMenuHold}
-          onPointerUp={clearMenuHold}
-          onPointerCancel={clearMenuHold}
-          onPointerLeave={clearMenuHold}
-          onContextMenu={event => event.preventDefault()}
+          aria-label="Open system menu"
+          title="System menu"
+          onClick={openSystemMenu}
           sx={{
             position: 'absolute',
             top: '4%',
@@ -519,7 +514,10 @@ function App() {
         <Dialog
           open={powerDialogOpen}
           onClose={() => {
-            if (!powerAction) setPowerDialogOpen(false);
+            if (!powerAction) {
+              setPowerDialogOpen(false);
+              setPendingPowerAction(null);
+            }
           }}
           aria-labelledby="power-options-title"
           slotProps={{
@@ -528,10 +526,20 @@ function App() {
             }
           }}
         >
-          <DialogTitle id="power-options-title">Power options</DialogTitle>
+          <DialogTitle id="power-options-title">
+            {pendingPowerAction === 'restart'
+              ? 'Restart now?'
+              : pendingPowerAction === 'poweroff'
+                ? 'Power off now?'
+                : 'Power options'}
+          </DialogTitle>
           <DialogContent>
             <DialogContentText>
-              Restart or safely turn off the Raspberry Pi?
+              {pendingPowerAction === 'restart'
+                ? 'The Raspberry Pi will restart and round-carplay will start again automatically.'
+                : pendingPowerAction === 'poweroff'
+                  ? 'The Raspberry Pi will safely shut down. Remove power only after the display turns off.'
+                  : 'Choose an action for the Raspberry Pi.'}
             </DialogContentText>
             {powerError && (
               <DialogContentText color="error" sx={{ mt: 1 }}>
@@ -540,25 +548,41 @@ function App() {
             )}
           </DialogContent>
           <DialogActions>
-            <Button disabled={powerAction != null} onClick={() => setPowerDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              disabled={powerAction != null}
-              onClick={() => requestPowerAction('restart')}
-            >
-              {powerAction === 'restart' ? <CircularProgress size={18} /> : 'Restart'}
-            </Button>
-            <Button
-              color="error"
-              variant="contained"
-              disabled={powerAction != null}
-              onClick={() => requestPowerAction('poweroff')}
-            >
-              {powerAction === 'poweroff'
-                ? <CircularProgress size={18} color="inherit" />
-                : 'Power off'}
-            </Button>
+            {pendingPowerAction ? (
+              <>
+                <Button
+                  disabled={powerAction != null}
+                  onClick={() => {
+                    setPowerDialogOpen(false);
+                    setPendingPowerAction(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  color={pendingPowerAction === 'poweroff' ? 'error' : 'primary'}
+                  variant="contained"
+                  disabled={powerAction != null}
+                  onClick={() => requestPowerAction(pendingPowerAction)}
+                >
+                  {powerAction
+                    ? <CircularProgress size={18} color="inherit" />
+                    : 'Confirm'}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button onClick={() => setPowerDialogOpen(false)}>Cancel</Button>
+                <Button onClick={() => setPendingPowerAction('restart')}>Restart</Button>
+                <Button
+                  color="error"
+                  variant="contained"
+                  onClick={() => setPendingPowerAction('poweroff')}
+                >
+                  Power off
+                </Button>
+              </>
+            )}
           </DialogActions>
         </Dialog>
 
