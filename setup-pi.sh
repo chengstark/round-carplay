@@ -6,9 +6,27 @@ set -euo pipefail
 # ----------------------------------------
 
 # 0) Variables
-USER_HOME="$HOME"
-INSTALL_USER="$(id -un)"
-INSTALL_UID="$(id -u)"
+# When the entire script is launched with sudo, retain the real desktop user
+# instead of installing a root-owned kiosk session (Electron will not run that
+# way). Individual privileged operations below still use sudo as needed.
+if [ "$(id -u)" -eq 0 ]; then
+  if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+    INSTALL_USER="$SUDO_USER"
+  else
+    echo "Error: Run this installer as the desktop user, not from a root login." >&2
+    exit 1
+  fi
+else
+  INSTALL_USER="$(id -un)"
+fi
+
+INSTALL_UID="$(id -u "$INSTALL_USER")"
+USER_HOME="$(getent passwd "$INSTALL_USER" | cut -d: -f6)"
+if [ -z "$USER_HOME" ]; then
+  echo "Error: Could not determine the home directory for $INSTALL_USER" >&2
+  exit 1
+fi
+
 APPIMAGE_PATH="$USER_HOME/round-carplay/round-carplay.AppImage"
 APPIMAGE_DIR="$(dirname "$APPIMAGE_PATH")"
 KIOSK_SERVICE="round-carplay-kiosk.service"
