@@ -79,7 +79,7 @@ The `setup-pi.sh` script performs the following tasks:
 
 1. checks for required tools, including the Cage Wayland kiosk compositor
 2. configures udev rules to ensure the proper access rights for the CarPlay dongle
-3. downloads the latest AppImage
+3. preserves the installed AppImage, or downloads the latest release on a fresh install
 4. makes a direct-to-app kiosk session the default boot experience
 5. creates a desktop shortcut for easy access to the application
 

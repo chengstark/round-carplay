@@ -63,24 +63,29 @@ else
   echo "   No ~/.local/share directory, skipping icon installation."
 fi
 
-# Fetch latest ARM64 AppImage from your repo Release
-echo "→ Fetching latest round-carplay release"
-latest_url=$(curl -s https://api.github.com/repos/OneMakerShow/round-carplay/releases/latest \
-  | grep "browser_download_url" \
-  | grep "arm64.AppImage" \
-  | cut -d '"' -f 4)
+# Preserve an AppImage already installed by the on-display updater. On a fresh
+# installation only, fetch the latest ARM64 release.
+if [ -f "$APPIMAGE_PATH" ]; then
+  echo "→ Keeping existing AppImage: $APPIMAGE_PATH"
+else
+  echo "→ Fetching latest round-carplay release"
+  latest_url=$(curl -s https://api.github.com/repos/OneMakerShow/round-carplay/releases/latest \
+    | grep "browser_download_url" \
+    | grep "arm64.AppImage" \
+    | cut -d '"' -f 4)
 
-if [ -z "$latest_url" ]; then
-  echo "Error: Could not find ARM64 AppImage URL in your repo releases" >&2
-  exit 1
-fi
+  if [ -z "$latest_url" ]; then
+    echo "Error: Could not find ARM64 AppImage URL in your repo releases" >&2
+    exit 1
+  fi
 
-echo "   Download URL: $latest_url"
-if ! curl -L "$latest_url" --output "$APPIMAGE_PATH"; then
-  echo "Error: Download failed" >&2
-  exit 1
+  echo "   Download URL: $latest_url"
+  if ! curl -L "$latest_url" --output "$APPIMAGE_PATH"; then
+    echo "Error: Download failed" >&2
+    exit 1
+  fi
+  echo "   Download complete: $APPIMAGE_PATH"
 fi
-echo "   Download complete: $APPIMAGE_PATH"
 
 # Mark AppImage as executable
 echo "→ Setting executable flag"
