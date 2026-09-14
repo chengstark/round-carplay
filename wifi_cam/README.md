@@ -1,12 +1,12 @@
 # Wi-Fi backup camera viewer
 
-Low-latency native diagnostic viewer for the JieLi AC792x/CC31 Wi-Fi backup
-camera used by Round CarPlay. The Electron application includes its own
-integrated receiver; this SDL program remains useful for protocol and latency
-testing outside the round-display UI. The camera control connection uses TCP
-port 3333 and the JPEG video stream uses UDP port 2224.
+Low-latency native diagnostic viewer for the XIAO ESP32-S3 Wi-Fi backup camera
+used by Round CarPlay. The Electron application includes its own integrated
+receiver; this SDL program remains useful for stream and latency testing outside
+the round-display UI. It configures the camera through HTTP port 80 and receives
+multipart MJPEG from `http://192.168.4.1:81/stream`.
 
-The camera currently delivers 1280x720 even when 640x480 is requested. The
+The default resolution is 1280×720, matching the previous JieLi camera. The
 viewer always presents the latest complete frame to minimize reversing-camera
 latency.
 
@@ -34,10 +34,10 @@ it when the viewer exits. It writes runtime diagnostics to
 ## Viewer options
 
 ```text
---host 192.168.1.1   Camera address
---width 640          Requested stream width
---height 480         Requested stream height
---fps 25             Requested camera frame rate
+--host 192.168.4.1   Camera address
+--frame-size 11      11=1280×720, 10=1024×768, 9=800×600,
+                     8=640×480, 5=320×240
+--quality 20         JPEG compression from 4–63; higher is smaller/faster
 --smooth             Three-frame buffer paced at 15 fps
 --buffer-frames 1    Completed-frame queue depth
 --display-fps 0      Presentation rate; 0 displays immediately

@@ -141,9 +141,9 @@ function App() {
   const backgroundColor = settings?.backgroundColor ?? DEFAULT_BACKGROUND;
   const surroundTextColor = contrastText(backgroundColor);
 
-  const openSystemMenu = () => {
-    setWifiCameraMode(false);
-    setSystemMenuOpen(true);
+  const toggleSystemMenu = () => {
+    if (!systemMenuOpen) setWifiCameraMode(false);
+    setSystemMenuOpen(open => !open);
   };
 
   const openPowerDialog = () => {
@@ -489,9 +489,9 @@ function App() {
             the central CarPlay square. Closing it reveals the still-mounted
             CarPlay surface immediately. */}
         <IconButton
-          aria-label="Open system menu"
+          aria-label={systemMenuOpen ? 'Close system menu' : 'Open system menu'}
           title="System menu"
-          onClick={openSystemMenu}
+          onClick={toggleSystemMenu}
           sx={{
             position: 'absolute',
             top: '4%',
@@ -600,7 +600,7 @@ function App() {
         />
 
         {/* Matching control in the right crescent. It toggles the integrated
-            JieLi Wi-Fi camera path; the existing USB camera route remains
+            XIAO ESP32-S3 Wi-Fi camera path; the existing USB camera route remains
             available from the CarPlay navigation tabs. Keeping this button
             above the video surface lets the same double-tap close it again. */}
         <CrescentButton
@@ -623,8 +623,23 @@ function App() {
           >
             <WifiCamera
               rotation={settings?.wifiCameraRotation ?? 0}
+              cameraOptions={{
+                host: settings?.wifiCameraHost ?? '192.168.4.1',
+                frameSize: settings?.wifiCameraFrameSize ?? 11,
+                jpegQuality: settings?.wifiCameraJpegQuality ?? 20
+              }}
               onRotationSave={rotation => {
                 if (settings) saveSettings({ ...settings, wifiCameraRotation: rotation });
+              }}
+              onCameraOptionsSave={options => {
+                if (settings) {
+                  saveSettings({
+                    ...settings,
+                    wifiCameraHost: options.host,
+                    wifiCameraFrameSize: options.frameSize,
+                    wifiCameraJpegQuality: options.jpegQuality
+                  });
+                }
               }}
               onExit={() => setWifiCameraMode(false)}
             />

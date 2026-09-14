@@ -26,18 +26,27 @@ Support for Linux (ARM/x86) and macOS (ARM) as well. It is a standalone Electron
 
 ## Wi-Fi backup camera
 
-The right-side crescent button opens the integrated JieLi AC792x/CC31 Wi-Fi
-backup camera. Double-tap the button to open or close the feed. The host running
-Round CarPlay must be connected to the camera's `W-Car...` Wi-Fi network; the
-application controls `192.168.1.1:3333` and receives MJPEG on UDP port `2224`.
+The right-side crescent button opens the integrated XIAO ESP32-S3 Wi-Fi backup
+camera. Double-tap the button to open or close the feed. The host running Round
+CarPlay must be connected to the XIAO camera's Wi-Fi network. The application
+configures the camera through `http://192.168.4.1/control` and receives standard
+multipart MJPEG from `http://192.168.4.1:81/stream`.
 The complete 16:9 camera image is displayed as the largest rectangle that fits
 inside the circular screen, so none of the source frame is cropped. The camera
 can be rotated continuously from `0°` through `359°`; the slider and `−1°` /
 `+1°` buttons support coarse and fine adjustment, and the selection is saved
 across restarts. For visual calibration, tap the adjustment button at the top
-center of the live feed, adjust the angle, then tap the same button again to
-save. While the camera is open it covers the clock and surround controls and
-provides a dedicated exit button at the upper left.
+center of the live feed. Resolution and JPEG compression can also be tuned from
+that panel while video is streaming; changes apply immediately and persist in
+the application config. HD `1280×720`, matching the previous JieLi camera, is
+the default. Lower resolutions and higher compression values are available when
+lower latency is more important than detail. While the camera is open it covers
+the clock and surround controls and provides a dedicated exit button at the
+upper left.
+
+No XIAO firmware update is required for these tuning controls. Round CarPlay
+sends the selected frame size and JPEG compression to the firmware's existing
+HTTP `/control` endpoint whenever the camera opens.
 
 The Camera tab continues to support ordinary USB cameras through the browser
 media-device API. The standalone low-latency SDL diagnostic viewer remains in
@@ -68,11 +77,31 @@ sudo chmod +x setup-pi.sh
 
 The `setup-pi.sh` script performs the following tasks:
 
-1. check for required tools: curl and xdg-user-dir
+1. checks for required tools, including the Cage Wayland kiosk compositor
 2. configures udev rules to ensure the proper access rights for the CarPlay dongle
 3. downloads the latest AppImage
-4. creates an autostart entry, so the application will launch automatically on boot
+4. makes a direct-to-app kiosk session the default boot experience
 5. creates a desktop shortcut for easy access to the application
+
+The kiosk session does not start the Raspberry Pi desktop, panel, update
+notifier, NetworkManager applet, or notification daemon. Wi-Fi connection and
+available-update pop-ups therefore cannot cover CarPlay. NetworkManager and the
+operating system's background update services remain enabled, and Wi-Fi can
+still be managed from Round CarPlay's on-display system menu.
+
+The installer leaves the current desktop session running and applies kiosk mode
+on the next reboot:
+
+```bash
+sudo reboot
+```
+
+To restore the full desktop for troubleshooting, run this command and reboot:
+
+```bash
+sudo round-carplay-desktop
+sudo reboot
+```
 
 *Do not run this script on other Linux distributions.*
 

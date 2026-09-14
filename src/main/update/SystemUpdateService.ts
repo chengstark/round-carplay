@@ -1,15 +1,11 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { chmod, copyFile, readdir, rename, stat, unlink } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 export type SystemUpdateState =
-  | 'idle'
-  | 'pulling'
-  | 'building'
-  | 'no-update'
-  | 'success'
-  | 'error'
+  'idle' | 'pulling' | 'building' | 'installing' | 'no-update' | 'success' | 'error'
 
 export type SystemUpdateStatus = {
   state: SystemUpdateState
@@ -105,9 +101,7 @@ export class SystemUpdateService {
 
       let previousCommit: string
       try {
-        const branch = (
-          await runCommand('git', ['branch', '--show-current'], repoPath)
-        ).trim()
+        const branch = (await runCommand('git', ['branch', '--show-current'], repoPath)).trim()
         if (branch !== TARGET_BRANCH) {
           return this.publish(
             {
@@ -140,7 +134,10 @@ export class SystemUpdateService {
         return this.publish({ state: 'no-update', message: 'Already up to date' }, onStatus)
       }
 
-      this.publish({ state: 'building', message: 'Update pulled. Building the AppImage…' }, onStatus)
+      this.publish(
+        { state: 'building', message: 'Update pulled. Building the AppImage…' },
+        onStatus
+      )
 
       try {
         await runCommand('npm', ['run', 'build:armLinux'], repoPath)
@@ -151,8 +148,23 @@ export class SystemUpdateService {
         )
       }
 
+      this.publish(
+        { state: 'installing', message: 'Build complete. Installing the AppImage…' },
+        onStatus
+      )
+
+      try {
+        const builtAppImage = await findBuiltAppImage(repoPath)
+        await installBuiltAppImage(builtAppImage)
+      } catch (error) {
+        return this.publish(
+          { state: 'error', message: `Install failed: ${errorMessage(error)}` },
+          onStatus
+        )
+      }
+
       return this.publish(
-        { state: 'success', message: 'Build complete. Restart to apply the update' },
+        { state: 'success', message: 'Update installed. Restart to use the new version' },
         onStatus
       )
     } catch (error) {
@@ -170,6 +182,55 @@ export class SystemUpdateService {
     listener(this.getStatus())
     return this.getStatus()
   }
+}
+
+async function findBuiltAppImage(repoPath: string): Promise<string> {
+  const outputPath = join(repoPath, 'dist')
+  const entries = await readdir(outputPath, { withFileTypes: true })
+  const appImages = entries.filter(
+    (entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.appimage')
+  )
+  const armImages = appImages.filter((entry) => entry.name.toLowerCase().includes('arm64'))
+  const candidates = armImages.length ? armImages : appImages
+
+  if (!candidates.length) {
+    throw new Error(`No AppImage found in ${outputPath}`)
+  }
+
+  const datedCandidates = await Promise.all(
+    candidates.map(async (entry) => {
+      const path = join(outputPath, entry.name)
+      return { path, modified: (await stat(path)).mtimeMs }
+    })
+  )
+
+  datedCandidates.sort((left, right) => right.modified - left.modified)
+  return datedCandidates[0].path
+}
+
+async function installBuiltAppImage(sourcePath: string): Promise<string> {
+  const configuredTarget =
+    process.env.ROUND_CARPLAY_APPIMAGE?.trim() || process.env.APPIMAGE?.trim()
+  const targetPath = resolve(
+    configuredTarget || join(homedir(), 'round-carplay', 'round-carplay.AppImage')
+  )
+
+  if (resolve(sourcePath) === targetPath) {
+    await chmod(targetPath, 0o755)
+    return targetPath
+  }
+
+  const temporaryPath = `${targetPath}.update-${process.pid}`
+  try {
+    await copyFile(sourcePath, temporaryPath)
+    await chmod(temporaryPath, 0o755)
+    await rename(temporaryPath, targetPath)
+  } catch (error) {
+    await unlink(temporaryPath).catch(() => undefined)
+    throw error
+  }
+
+  return targetPath
 }
 
 function findRepository(): string | null {
@@ -210,7 +271,7 @@ function runCommand(command: string, args: string[], cwd: string): Promise<strin
     child.stdout.on('data', appendOutput)
     child.stderr.on('data', appendOutput)
     child.on('error', rejectCommand)
-    child.on('close', code => {
+    child.on('close', (code) => {
       if (code === 0) {
         resolveCommand(output)
         return
@@ -223,11 +284,13 @@ function runCommand(command: string, args: string[], cwd: string): Promise<strin
 }
 
 function lastOutputLine(output: string): string {
-  return output
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(Boolean)
-    .at(-1) ?? ''
+  return (
+    output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .at(-1) ?? ''
+  )
 }
 
 function errorMessage(error: unknown): string {

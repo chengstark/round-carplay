@@ -78,15 +78,16 @@ export default function SystemMenu({
 
   useEffect(() => {
     let active = true
-    const removeUpdateListener = window.carplay.update.onStatus(status => {
+    const removeUpdateListener = window.carplay.update.onStatus((status) => {
       if (active) setUpdateStatus(status)
     })
 
-    window.carplay.update.getStatus()
-      .then(status => {
+    window.carplay.update
+      .getStatus()
+      .then((status) => {
         if (active) setUpdateStatus(status)
       })
-      .catch(error => {
+      .catch((error) => {
         if (active) {
           setUpdateStatus({
             state: 'error',
@@ -156,17 +157,21 @@ export default function SystemMenu({
     }
   }
 
-  const updating = updateStatus.state === 'pulling' || updateStatus.state === 'building'
-  const updateColor = updateStatus.state === 'success'
-    ? '#69d58b'
-    : updateStatus.state === 'error'
-      ? '#ff8585'
-      : updateStatus.state === 'no-update'
-        ? '#8fc7ff'
-        : 'rgba(255,255,255,0.72)'
+  const updating =
+    updateStatus.state === 'pulling' ||
+    updateStatus.state === 'building' ||
+    updateStatus.state === 'installing'
+  const updateColor =
+    updateStatus.state === 'success'
+      ? '#69d58b'
+      : updateStatus.state === 'error'
+        ? '#ff8585'
+        : updateStatus.state === 'no-update'
+          ? '#8fc7ff'
+          : 'rgba(255,255,255,0.72)'
 
   const currentIp = ipAddresses.length
-    ? ipAddresses.map(item => `${item.interface}: ${item.address}`).join('  ·  ')
+    ? ipAddresses.map((item) => `${item.interface}: ${item.address}`).join('  ·  ')
     : 'No IPv4 address'
 
   return (
@@ -196,7 +201,7 @@ export default function SystemMenu({
         Surround background
       </Typography>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, mb: 1 }}>
-        {BACKGROUND_PRESETS.map(color => (
+        {BACKGROUND_PRESETS.map((color) => (
           <button
             key={color}
             type="button"
@@ -208,9 +213,10 @@ export default function SystemMenu({
               flex: '0 0 auto',
               padding: 0,
               borderRadius: '50%',
-              border: color.toLowerCase() === backgroundColor.toLowerCase()
-                ? '3px solid #fff'
-                : '1px solid rgba(255,255,255,0.5)',
+              border:
+                color.toLowerCase() === backgroundColor.toLowerCase()
+                  ? '3px solid #fff'
+                  : '1px solid rgba(255,255,255,0.5)',
               backgroundColor: color,
               boxShadow: '0 1px 4px rgba(0,0,0,0.65)'
             }}
@@ -231,7 +237,7 @@ export default function SystemMenu({
             aria-label="Custom background color"
             type="color"
             value={backgroundColor}
-            onChange={event => onBackgroundColorChange(event.target.value)}
+            onChange={(event) => onBackgroundColorChange(event.target.value)}
             style={{ width: 42, height: 42, margin: -6, padding: 0, border: 0 }}
           />
         </label>
@@ -248,7 +254,7 @@ export default function SystemMenu({
           max={90}
           step={5}
           valueLabelDisplay="auto"
-          valueLabelFormat={value => `${value}%`}
+          valueLabelFormat={(value) => `${value}%`}
           onChange={(_, value) => {
             if (typeof value === 'number') setGpsSmoothingDraft(value / 100)
           }}
@@ -277,7 +283,11 @@ export default function SystemMenu({
           size="small"
           sx={{ color: '#fff' }}
         >
-          {scanning ? <CircularProgress size={18} color="inherit" /> : <RefreshIcon fontSize="small" />}
+          {scanning ? (
+            <CircularProgress size={18} color="inherit" />
+          ) : (
+            <RefreshIcon fontSize="small" />
+          )}
         </IconButton>
       </Box>
 
@@ -295,7 +305,7 @@ export default function SystemMenu({
             No Wi-Fi networks found
           </Typography>
         )}
-        {networks.map(network => {
+        {networks.map((network) => {
           const selected = selectedNetwork?.ssid === network.ssid
           return (
             <button
@@ -345,7 +355,7 @@ export default function SystemMenu({
             <TextField
               type="password"
               value={password}
-              onChange={event => setPassword(event.target.value)}
+              onChange={(event) => setPassword(event.target.value)}
               placeholder="Wi-Fi password"
               size="small"
               fullWidth
@@ -395,9 +405,11 @@ export default function SystemMenu({
           disabled={updating}
           onClick={startUpdate}
           startIcon={
-            updating
-              ? <CircularProgress size={15} color="inherit" />
-              : <SystemUpdateAltIcon fontSize="small" />
+            updating ? (
+              <CircularProgress size={15} color="inherit" />
+            ) : (
+              <SystemUpdateAltIcon fontSize="small" />
+            )
           }
           sx={{
             flex: '0 0 auto',
@@ -411,7 +423,9 @@ export default function SystemMenu({
             ? 'Pulling'
             : updateStatus.state === 'building'
               ? 'Building'
-              : 'Update'}
+              : updateStatus.state === 'installing'
+                ? 'Installing'
+                : 'Update'}
         </Button>
         <Typography
           variant="caption"
@@ -464,7 +478,7 @@ export default function SystemMenu({
         <DialogTitle id="reboot-confirmation-title">Reboot now?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            The update finished building. Reboot the Raspberry Pi to start the new version.
+            The update is installed. Reboot the Raspberry Pi to start the new version.
           </DialogContentText>
         </DialogContent>
         <DialogActions>

@@ -20,7 +20,7 @@
     "postinstall": "electron-builder install-app-deps",
     "build:mac": "npm run clock:check && electron-vite build && electron-builder --mac --arm64 --config",
     "build:linux": "npm run clock:check && electron-vite build && electron-builder --linux --config",
-    "build:armLinux": "npm run clock:check && electron-vite build && electron-builder --linux AppImage --arm64 --config"
+    "build:armLinux": "npm run clock:check && electron-vite build && electron-builder --linux AppImage --arm64 --config && node scripts/install-built-appimage.mjs"
   },
   "dependencies": {
     "@electron-toolkit/utils": "4.0.0",

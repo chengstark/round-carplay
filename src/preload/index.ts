@@ -11,6 +11,8 @@ import type {
   SystemRebootResult,
   SystemUpdateStatus
 } from '../main/update/SystemUpdateService'
+import type { WifiCameraOptions } from '../main/Globals'
+import type { WifiCameraStartResult } from '../main/wifi/WifiCameraService'
 
 type ApiCallback<T = any> = (event: IpcRendererEvent, ...args: T[]) => void
 
@@ -82,7 +84,10 @@ export const api = {
   },
 
   wifiCamera: {
-    start: () => ipcRenderer.invoke('wifi-camera-start'),
+    start: (options: WifiCameraOptions): Promise<WifiCameraStartResult> =>
+      ipcRenderer.invoke('wifi-camera-start', options),
+    configure: (options: WifiCameraOptions): Promise<WifiCameraStartResult> =>
+      ipcRenderer.invoke('wifi-camera-configure', options),
     stop: () => ipcRenderer.invoke('wifi-camera-stop'),
     acknowledgeFrame: () => ipcRenderer.send('wifi-camera-frame-ack'),
     onFrame: (callback: (frame: Uint8Array) => void) => {

@@ -5,7 +5,7 @@ set -o pipefail
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 viewer="$script_dir/build/wifi_backup_viewer"
 log_file="$script_dir/wifi_backup_viewer_pi.log"
-camera_ip="192.168.1.1"
+camera_ip="192.168.4.1"
 
 if [[ ! -x "$viewer" ]]; then
   echo "Viewer not found: $viewer" >&2

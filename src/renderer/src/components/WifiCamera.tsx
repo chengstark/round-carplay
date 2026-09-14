@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { IconButton, Slider, Typography } from '@mui/material'
+import { FormControl, IconButton, MenuItem, Select, Slider, Stack, Typography } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
 import RemoveIcon from '@mui/icons-material/Remove'
 import TuneIcon from '@mui/icons-material/Tune'
-import type { WifiCameraRotation } from '../../../main/Globals'
+import {
+  WIFI_CAMERA_RESOLUTIONS,
+  type WifiCameraFrameSize,
+  type WifiCameraOptions,
+  type WifiCameraRotation
+} from '../../../main/Globals'
 import ParkingGuides from './ParkingGuides'
 
 type CameraStatus = {
@@ -13,21 +18,27 @@ type CameraStatus = {
   message: string
 }
 
-/** Integrated JieLi Wi-Fi camera surface. The USB Camera component remains
+/** Integrated XIAO ESP32-S3 Wi-Fi camera surface. The USB Camera component remains
  * separate and continues to back the existing /camera route. */
 export default function WifiCamera({
   rotation,
+  cameraOptions,
   onRotationSave,
+  onCameraOptionsSave,
   onExit
 }: {
   rotation: WifiCameraRotation
+  cameraOptions: WifiCameraOptions
   onRotationSave: (rotation: WifiCameraRotation) => void
+  onCameraOptionsSave: (options: WifiCameraOptions) => void
   onExit: () => void
 }): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rotationRef = useRef<WifiCameraRotation>(rotation)
   const [calibrating, setCalibrating] = useState(false)
   const [draftRotation, setDraftRotation] = useState(rotation)
+  const [draftFrameSize, setDraftFrameSize] = useState(cameraOptions.frameSize)
+  const [draftJpegQuality, setDraftJpegQuality] = useState(cameraOptions.jpegQuality)
   const [hasFrame, setHasFrame] = useState(false)
   const [status, setStatus] = useState<CameraStatus>({
     state: 'connecting',
@@ -40,6 +51,13 @@ export default function WifiCamera({
       setDraftRotation(rotation)
     }
   }, [rotation, calibrating])
+
+  useEffect(() => {
+    if (!calibrating) {
+      setDraftFrameSize(cameraOptions.frameSize)
+      setDraftJpegQuality(cameraOptions.jpegQuality)
+    }
+  }, [cameraOptions.frameSize, cameraOptions.jpegQuality, calibrating])
 
   const updateDraftRotation = (value: number): void => {
     const rounded = Math.round(value)
@@ -58,6 +76,21 @@ export default function WifiCamera({
     rotationRef.current = rotation
     setDraftRotation(rotation)
     setCalibrating(true)
+  }
+
+  const applyCameraTuning = async (
+    frameSize: WifiCameraFrameSize,
+    jpegQuality: number
+  ): Promise<void> => {
+    const next = { ...cameraOptions, frameSize, jpegQuality }
+    setDraftFrameSize(frameSize)
+    setDraftJpegQuality(jpegQuality)
+    onCameraOptionsSave(next)
+
+    const result = await window.carplay.wifiCamera.configure(next)
+    if (!result.ok) {
+      setStatus({ state: 'error', message: result.error ?? 'Camera tuning failed' })
+    }
   }
 
   useEffect(() => {
@@ -135,7 +168,11 @@ export default function WifiCamera({
       }
     })
 
-    window.carplay.wifiCamera.start().catch((error) => {
+    window.carplay.wifiCamera.start(cameraOptions).then(result => {
+      if (active && !result.ok) {
+        setStatus({ state: 'error', message: result.error ?? 'Camera connection failed' })
+      }
+    }).catch((error) => {
       if (active) {
         setStatus({
           state: 'error',
@@ -205,7 +242,7 @@ export default function WifiCamera({
             </Typography>
             {status.state === 'error' && (
               <Typography variant="caption" sx={{ mt: 1.5, opacity: 0.65 }}>
-                Connect this device to the W-Car Wi-Fi network.
+                Connect this device to the XIAO camera Wi-Fi network.
               </Typography>
             )}
           </div>
@@ -265,8 +302,8 @@ export default function WifiCamera({
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 4,
-            width: '72%',
-            padding: '14px 22px 8px',
+            width: '78%',
+            padding: '12px 22px 10px',
             borderRadius: 14,
             color: '#fff',
             background: 'rgba(0,0,0,0.72)',
@@ -338,6 +375,64 @@ export default function WifiCamera({
               <AddIcon />
             </IconButton>
           </div>
+          <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 1 }}>
+            <FormControl size="small" sx={{ minWidth: 155 }}>
+              <Select
+                aria-label="Wi-Fi camera resolution"
+                value={draftFrameSize}
+                onChange={event => {
+                  const frameSize = Number(event.target.value) as WifiCameraFrameSize
+                  void applyCameraTuning(frameSize, draftJpegQuality)
+                }}
+                sx={{
+                  color: '#fff',
+                  backgroundColor: 'rgba(255,255,255,0.1)',
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.45)' },
+                  '& .MuiSvgIcon-root': { color: '#fff' }
+                }}
+              >
+                {WIFI_CAMERA_RESOLUTIONS.map(resolution => (
+                  <MenuItem key={resolution.value} value={resolution.value}>
+                    {resolution.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="caption" display="block" align="center">
+                JPEG compression {draftJpegQuality}
+              </Typography>
+              <Slider
+                aria-label="Wi-Fi camera JPEG compression"
+                value={draftJpegQuality}
+                min={4}
+                max={63}
+                step={1}
+                valueLabelDisplay="auto"
+                onChange={(_, value) => {
+                  if (typeof value === 'number') setDraftJpegQuality(value)
+                }}
+                onChangeCommitted={(_, value) => {
+                  if (typeof value === 'number') {
+                    void applyCameraTuning(draftFrameSize, value)
+                  }
+                }}
+                sx={{ color: '#e6e3db' }}
+              />
+            </div>
+          </Stack>
+          <Typography variant="caption" display="block" align="center" sx={{ opacity: 0.72 }}>
+            Higher compression values usually reduce latency. Changes apply live and are saved.
+          </Typography>
+          <Typography
+            variant="caption"
+            display="block"
+            align="center"
+            color={status.state === 'error' ? '#ff9a9a' : 'inherit'}
+            sx={{ mt: 0.5, opacity: 0.82 }}
+          >
+            {status.message}
+          </Typography>
         </div>
       )}
     </div>

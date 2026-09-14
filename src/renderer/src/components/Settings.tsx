@@ -1,4 +1,4 @@
-import { ExtraConfig } from "../../../main/Globals"
+import { ExtraConfig, WifiCameraFrameSize, WIFI_CAMERA_RESOLUTIONS } from "../../../main/Globals"
 import React, { useEffect, useMemo, useState } from "react"
 import {
   Box,
@@ -19,6 +19,8 @@ import {
   Slider,
   CircularProgress,
   Typography,
+  Select,
+  MenuItem,
 } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 import { TransitionProps } from '@mui/material/transitions'
@@ -70,7 +72,7 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
     const updated = { ...activeSettings, [key]: value }
     setActiveSettings(updated)
 
-    if (['audioVolume', 'navVolume', 'wifiCameraRotation'].includes(key)) {
+    if (['audioVolume', 'navVolume', 'wifiCameraRotation', 'wifiCameraJpegQuality'].includes(key)) {
       debouncedSave(updated)
     } else if (['kiosk', 'nightMode'].includes(key)) {
       saveSettings(updated)
@@ -269,6 +271,61 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
                   sx={{ width: 110, flexShrink: 0 }}
                 />
               </Stack>
+            </FormControl>
+          </Grid>
+
+          <Grid size={{ xs: 3 }} sx={{ minWidth: 180, mx: 2 }}>
+            <TextField
+              label="XIAO CAMERA ADDRESS"
+              fullWidth
+              value={activeSettings.wifiCameraHost}
+              onChange={event => settingsChange('wifiCameraHost', event.target.value)}
+              helperText="Default: 192.168.4.1"
+            />
+          </Grid>
+
+          <Grid size={{ xs: 3 }} sx={{ minWidth: 180, mx: 2 }}>
+            <FormControl fullWidth>
+              <FormLabel>WI-FI CAMERA RESOLUTION</FormLabel>
+              <Select
+                value={activeSettings.wifiCameraFrameSize}
+                onChange={event => settingsChange(
+                  'wifiCameraFrameSize',
+                  Number(event.target.value) as WifiCameraFrameSize
+                )}
+              >
+                {WIFI_CAMERA_RESOLUTIONS.map(resolution => (
+                  <MenuItem key={resolution.value} value={resolution.value}>
+                    {resolution.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid size={{ xs: 6 }} sx={{ minWidth: 280, mx: 2 }}>
+            <FormControl fullWidth>
+              <FormLabel>
+                WI-FI CAMERA JPEG COMPRESSION — {activeSettings.wifiCameraJpegQuality}
+              </FormLabel>
+              <Slider
+                value={activeSettings.wifiCameraJpegQuality}
+                min={4}
+                max={63}
+                step={1}
+                marks={[
+                  { value: 10, label: 'High detail' },
+                  { value: 20, label: 'Default' },
+                  { value: 40, label: 'Lower latency' }
+                ]}
+                valueLabelDisplay="auto"
+                onChange={(_, value) => {
+                  if (typeof value === 'number') settingsChange('wifiCameraJpegQuality', value)
+                }}
+              />
+              <Typography variant="caption" color="text.secondary">
+                Higher values use more compression and usually stream faster.
+              </Typography>
             </FormControl>
           </Grid>
 

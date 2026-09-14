@@ -4,7 +4,7 @@ import { existsSync, createReadStream, readFileSync, writeFileSync } from 'fs'
 import { electronApp, is } from '@electron-toolkit/utils'
 import { DEFAULT_CONFIG } from '@carplay/node'
 import { Socket } from './Socket'
-import { ExtraConfig, KeyBindings } from './Globals'
+import { ExtraConfig, KeyBindings, WifiCameraFrameSize, WIFI_CAMERA_RESOLUTIONS } from './Globals'
 import { USBService } from './usb/USBService'
 import { CarplayService } from './carplay/CarplayService'
 import { WifiCameraService } from './wifi/WifiCameraService'
@@ -159,6 +159,9 @@ function loadConfig(): ExtraConfig {
     camera: '',
     backgroundColor: '#000000',
     wifiCameraRotation: 0,
+    wifiCameraHost: '192.168.4.1',
+    wifiCameraFrameSize: 11,
+    wifiCameraJpegQuality: 20,
     gpsSmoothing: 0.55,
     microphone: '',
     nightMode: true,
@@ -174,6 +177,9 @@ function loadConfig(): ExtraConfig {
   }
   merged.backgroundColor = normalizeBackgroundColor(merged.backgroundColor)
   merged.wifiCameraRotation = normalizeWifiCameraRotation(merged.wifiCameraRotation)
+  merged.wifiCameraHost = normalizeWifiCameraHost(merged.wifiCameraHost)
+  merged.wifiCameraFrameSize = normalizeWifiCameraFrameSize(merged.wifiCameraFrameSize)
+  merged.wifiCameraJpegQuality = normalizeWifiCameraJpegQuality(merged.wifiCameraJpegQuality)
   merged.gpsSmoothing = normalizeGpsSmoothing(merged.gpsSmoothing)
 
   const needWrite = !existsSync(configPath) || JSON.stringify(fileConfig) !== JSON.stringify(merged)
@@ -326,7 +332,8 @@ app.whenReady().then(() => {
   socket = new Socket(config, saveSettings)
 
   ipcMain.handle('quit', () => (process.platform === 'darwin' ? mainWindow?.hide() : app.quit()))
-  ipcMain.handle('wifi-camera-start', () => wifiCameraService.start())
+  ipcMain.handle('wifi-camera-start', (_event, options) => wifiCameraService.start(options))
+  ipcMain.handle('wifi-camera-configure', (_event, options) => wifiCameraService.configure(options))
   ipcMain.handle('wifi-camera-stop', () => wifiCameraService.stop())
   ipcMain.on('wifi-camera-frame-ack', () => wifiCameraService.acknowledgeFrame())
   ipcMain.handle('gps-get-state', () => gpsService.getState())
@@ -374,6 +381,9 @@ function saveSettings(settings: ExtraConfig) {
         mediaDelay: +settings.mediaDelay,
         backgroundColor: normalizeBackgroundColor(settings.backgroundColor),
         wifiCameraRotation: normalizeWifiCameraRotation(settings.wifiCameraRotation),
+        wifiCameraHost: normalizeWifiCameraHost(settings.wifiCameraHost),
+        wifiCameraFrameSize: normalizeWifiCameraFrameSize(settings.wifiCameraFrameSize),
+        wifiCameraJpegQuality: normalizeWifiCameraJpegQuality(settings.wifiCameraJpegQuality),
         gpsSmoothing: normalizeGpsSmoothing(settings.gpsSmoothing)
       },
       null,
@@ -402,6 +412,30 @@ function normalizeWifiCameraRotation(value: unknown): number {
   const rotation = Number(value)
   if (!Number.isFinite(rotation)) return 0
   return ((rotation % 360) + 360) % 360
+}
+
+function normalizeWifiCameraHost(value: unknown): string {
+  const candidate = String(value ?? '').trim()
+  if (!candidate) return '192.168.4.1'
+
+  try {
+    const url = new URL(candidate.includes('://') ? candidate : `http://${candidate}`)
+    return url.hostname || '192.168.4.1'
+  } catch {
+    return '192.168.4.1'
+  }
+}
+
+function normalizeWifiCameraFrameSize(value: unknown): WifiCameraFrameSize {
+  const frameSize = Number(value)
+  const supported = WIFI_CAMERA_RESOLUTIONS.some(resolution => resolution.value === frameSize)
+  return supported ? frameSize as WifiCameraFrameSize : 11
+}
+
+function normalizeWifiCameraJpegQuality(value: unknown): number {
+  const quality = Math.round(Number(value))
+  if (!Number.isFinite(quality)) return 20
+  return Math.min(63, Math.max(4, quality))
 }
 
 function normalizeGpsSmoothing(value: unknown): number {

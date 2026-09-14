@@ -1,21 +1,20 @@
 import { WebContents } from 'electron'
-import dgram from 'node:dgram'
-import net from 'node:net'
+import http, { ClientRequest, IncomingMessage } from 'node:http'
+import type { WifiCameraFrameSize, WifiCameraOptions } from '../Globals'
 
-const DEFAULT_HOST = '192.168.1.1'
-const CONTROL_PORT = 3333
-const UDP_PORT = 2224
-const FRAME_HEADER_SIZE = 20
-const JPEG_FRAME_TYPE = 2
+const DEFAULT_OPTIONS: WifiCameraOptions = {
+  host: '192.168.4.1',
+  frameSize: 11,
+  jpegQuality: 20
+}
+const CONTROL_PORT = 80
+const STREAM_PORT = 81
 const MAX_FRAME_SIZE = 16 * 1024 * 1024
-const MAX_ASSEMBLIES = 8
+const JPEG_START = Buffer.from([0xff, 0xd8])
+const JPEG_END = Buffer.from([0xff, 0xd9])
+const SUPPORTED_FRAME_SIZES = new Set<number>([5, 8, 9, 10, 11])
 
 type CameraState = 'connecting' | 'streaming' | 'error' | 'stopped'
-
-interface FrameAssembly {
-  frameSize: number
-  chunks: Map<number, Buffer>
-}
 
 export interface WifiCameraStartResult {
   ok: boolean
@@ -23,34 +22,35 @@ export interface WifiCameraStartResult {
 }
 
 /**
- * JieLi AC792x/CC31 camera client used by the round-display UI.
+ * XIAO ESP32-S3 HTTP camera client used by the round-display UI.
  *
- * Control uses the camera's CTP protocol over TCP. Video is fragmented MJPEG
- * delivered to UDP port 2224. Only one JPEG is allowed to be in flight to the
- * renderer; if Chromium is still decoding it, newer completed frames replace
+ * The camera exposes ESP32 CameraWebServer controls on port 80 and a multipart
+ * MJPEG stream on port 81. Only one JPEG is allowed to be in flight to the
+ * renderer; if Chromium is still decoding it, newer complete frames replace
  * the pending frame so latency cannot grow into a backlog.
  */
 export class WifiCameraService {
   private renderer: WebContents | null = null
-  private control: net.Socket | null = null
-  private udp: dgram.Socket | null = null
-  private heartbeat: NodeJS.Timeout | null = null
-  private controlBuffer = Buffer.alloc(0)
-  private assemblies = new Map<number, FrameAssembly>()
-  private accessed = false
+  private streamRequest: ClientRequest | null = null
+  private streamResponse: IncomingMessage | null = null
+  private streamBuffer = Buffer.alloc(0)
+  private options: WifiCameraOptions = DEFAULT_OPTIONS
   private running = false
   private starting: Promise<WifiCameraStartResult> | null = null
   private rendererBusy = false
   private pendingFrame: Buffer | null = null
+  private receivedFrame = false
 
   attachRenderer(renderer: WebContents): void {
     this.renderer = renderer
   }
 
-  start(): Promise<WifiCameraStartResult> {
-    if (this.running && !this.starting) return Promise.resolve({ ok: true })
+  start(options: WifiCameraOptions): Promise<WifiCameraStartResult> {
+    const normalized = normalizeOptions(options)
     if (this.starting) return this.starting
+    if (this.running) return this.configure(normalized)
 
+    this.options = normalized
     this.starting = this.startInternal().finally(() => {
       this.starting = null
     })
@@ -59,57 +59,56 @@ export class WifiCameraService {
 
   private async startInternal(): Promise<WifiCameraStartResult> {
     this.running = true
-    this.accessed = false
     this.rendererBusy = false
     this.pendingFrame = null
-    this.controlBuffer = Buffer.alloc(0)
-    this.assemblies.clear()
-    this.sendStatus('connecting', 'Connecting to Wi-Fi camera…')
+    this.streamBuffer = Buffer.alloc(0)
+    this.receivedFrame = false
+    this.sendStatus('connecting', `Connecting to XIAO camera at ${this.options.host}…`)
 
     try {
-      await this.bindUdp()
-      await this.connectControl()
-
-      this.sendTopic('APP_ACCESS', {
-        op: 'PUT',
-        param: { type: '0', ver: '20701' }
-      })
-
-      // The retail camera normally acknowledges APP_ACCESS immediately, then
-      // emits its initial status topics. Waiting briefly keeps OPEN_RT_STREAM
-      // from racing that startup burst without making the button feel slow.
-      await this.waitForAccess(1000)
-      await delay(350)
-
+      await this.applyCameraSettings(this.options)
       if (!this.running) throw new Error('Camera start cancelled')
-      this.sendTopic('OPEN_RT_STREAM', {
-        op: 'PUT',
-        param: { format: '0', w: '1280', h: '720', fps: '25' }
-      })
-
-      this.heartbeat = setInterval(() => {
-        if (this.running) this.sendTopic('CTP_KEEP_ALIVE', { op: 'PUT' })
-      }, 5000)
-
-      this.sendStatus('streaming', 'Waiting for camera video…')
+      this.sendStatus('connecting', 'Opening XIAO camera video…')
+      await this.openStream()
       return { ok: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      if (!this.running) return { ok: false, error: message }
       this.cleanup()
       this.sendStatus('error', message)
       return { ok: false, error: message }
     }
   }
 
-  stop(): void {
-    if (this.control?.writable) {
-      this.sendTopic('CLOSE_RT_STREAM', {
-        op: 'PUT',
-        param: { status: '1' }
-      })
+  async configure(options: WifiCameraOptions): Promise<WifiCameraStartResult> {
+    const normalized = normalizeOptions(options)
+    const hostChanged = normalized.host !== this.options.host
+    this.options = normalized
+
+    if (!this.running) return { ok: true }
+    if (hostChanged) {
+      return {
+        ok: false,
+        error: 'Camera address saved. Close and reopen the camera to connect to the new address.'
+      }
     }
+
+    try {
+      await this.applyCameraSettings(normalized)
+      if (this.running) {
+        this.sendStatus('streaming', `Camera tuned to ${frameSizeLabel(normalized.frameSize)}`)
+      }
+      return { ok: true }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.sendStatus('error', message)
+      return { ok: false, error: message }
+    }
+  }
+
+  stop(): void {
     this.cleanup()
-    this.sendStatus('stopped', 'Wi-Fi camera stopped')
+    this.sendStatus('stopped', 'XIAO camera stopped')
   }
 
   acknowledgeFrame(): void {
@@ -123,225 +122,96 @@ export class WifiCameraService {
 
   private cleanup(): void {
     this.running = false
-    if (this.heartbeat) clearInterval(this.heartbeat)
-    this.heartbeat = null
-
-    this.control?.destroy()
-    this.control = null
-
-    try {
-      this.udp?.close()
-    } catch {
-      // Socket may already be closed after a startup error.
-    }
-    this.udp = null
-
-    this.controlBuffer = Buffer.alloc(0)
-    this.assemblies.clear()
+    this.streamRequest?.destroy()
+    this.streamResponse?.destroy()
+    this.streamRequest = null
+    this.streamResponse = null
+    this.streamBuffer = Buffer.alloc(0)
     this.rendererBusy = false
     this.pendingFrame = null
+    this.receivedFrame = false
   }
 
-  private async bindUdp(): Promise<void> {
-    const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true })
-    this.udp = socket
-
-    socket.on('message', (datagram) => this.consumeDatagram(datagram))
-    socket.on('error', (error) => {
-      if (this.running) this.sendStatus('error', `UDP: ${error.message}`)
-    })
-
-    await new Promise<void>((resolve, reject) => {
-      const onError = (error: Error) => {
-        socket.off('listening', onListening)
-        reject(error)
-      }
-      const onListening = () => {
-        socket.off('error', onError)
-        resolve()
-      }
-      socket.once('error', onError)
-      socket.once('listening', onListening)
-      socket.bind(UDP_PORT)
-    })
-
-    try {
-      socket.setRecvBufferSize(8 * 1024 * 1024)
-    } catch (error) {
-      console.warn('[WifiCamera] Could not enlarge UDP receive buffer', error)
-    }
-    console.log(`[WifiCamera] Listening for MJPEG on UDP :${UDP_PORT}`)
+  private async applyCameraSettings(options: WifiCameraOptions): Promise<void> {
+    await requestControl(options.host, 'framesize', options.frameSize)
+    await requestControl(options.host, 'quality', options.jpegQuality)
   }
 
-  private async connectControl(): Promise<void> {
-    const socket = new net.Socket()
-    this.control = socket
+  private openStream(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const request = http.get(
+        {
+          hostname: this.options.host,
+          port: STREAM_PORT,
+          path: '/stream',
+          headers: { Accept: 'multipart/x-mixed-replace' }
+        },
+        response => {
+          if (response.statusCode !== 200) {
+            response.resume()
+            reject(new Error(`Camera stream returned HTTP ${response.statusCode ?? 'unknown'}`))
+            return
+          }
 
-    socket.setNoDelay(true)
-    socket.on('data', (data) => this.consumeControl(data))
-    socket.on('error', (error) => {
-      if (this.running && !this.starting) {
-        this.sendStatus('error', `Control: ${error.message}`)
-      }
-    })
-    socket.on('close', () => {
-      if (this.running && !this.starting) {
-        this.sendStatus('error', 'Camera control connection closed')
-      }
-    })
-
-    await new Promise<void>((resolve, reject) => {
-      const onError = (error: Error) => {
-        socket.off('connect', onConnect)
-        reject(error)
-      }
-      const onConnect = () => {
-        socket.off('error', onError)
-        resolve()
-      }
-      socket.once('error', onError)
-      socket.once('connect', onConnect)
-      socket.connect(CONTROL_PORT, DEFAULT_HOST)
-    })
-
-    console.log(`[WifiCamera] Control connected to ${DEFAULT_HOST}:${CONTROL_PORT}`)
-  }
-
-  private waitForAccess(timeoutMs: number): Promise<void> {
-    if (this.accessed) return Promise.resolve()
-
-    return new Promise((resolve) => {
-      const started = Date.now()
-      const timer = setInterval(() => {
-        if (this.accessed || !this.running || Date.now() - started >= timeoutMs) {
-          clearInterval(timer)
+          this.streamResponse = response
+          response.on('data', chunk => {
+            if (this.running) this.consumeStreamChunk(Buffer.from(chunk))
+          })
+          response.on('aborted', () => this.handleStreamFailure('Camera stream was interrupted'))
+          response.on('error', error => this.handleStreamFailure(`Camera stream: ${error.message}`))
+          response.on('close', () => {
+            if (this.running) this.handleStreamFailure('Camera stream connection closed')
+          })
           resolve()
         }
-      }, 25)
+      )
+
+      this.streamRequest = request
+      request.setTimeout(8_000, () => request.destroy(new Error('Camera connection timed out')))
+      request.once('error', error => {
+        if (this.starting) reject(new Error(`Camera connection: ${error.message}`))
+        else this.handleStreamFailure(`Camera connection: ${error.message}`)
+      })
     })
   }
 
-  private sendTopic(topic: string, payload: Record<string, unknown>): void {
-    if (!this.control?.writable) return
+  private consumeStreamChunk(chunk: Buffer): void {
+    this.streamBuffer = Buffer.concat([this.streamBuffer, chunk])
 
-    const topicBytes = Buffer.from(topic, 'utf8')
-    const jsonBytes = Buffer.from(JSON.stringify(payload), 'utf8')
-    const header = Buffer.alloc(10)
-    header.write('CTP:', 0, 'ascii')
-    header.writeUInt16LE(topicBytes.length, 4)
-    header.writeUInt32LE(jsonBytes.length, 6)
-    this.control.write(
-      Buffer.concat([header.subarray(0, 6), topicBytes, header.subarray(6), jsonBytes])
-    )
-  }
-
-  private consumeControl(data: Buffer): void {
-    this.controlBuffer = Buffer.concat([this.controlBuffer, data])
-
-    while (this.controlBuffer.length >= 10) {
-      const signature = this.controlBuffer.indexOf('CTP:')
-      if (signature < 0) {
-        this.controlBuffer = this.controlBuffer.subarray(Math.max(0, this.controlBuffer.length - 3))
-        return
-      }
-      if (signature > 0) this.controlBuffer = this.controlBuffer.subarray(signature)
-      if (this.controlBuffer.length < 10) return
-
-      const topicLength = this.controlBuffer.readUInt16LE(4)
-      if (topicLength > 4096) {
-        this.controlBuffer = this.controlBuffer.subarray(4)
-        continue
-      }
-
-      const payloadLengthOffset = 6 + topicLength
-      if (this.controlBuffer.length < payloadLengthOffset + 4) return
-      const payloadLength = this.controlBuffer.readUInt32LE(payloadLengthOffset)
-      if (payloadLength > 5 * 1024 * 1024) {
-        this.controlBuffer = this.controlBuffer.subarray(4)
-        continue
-      }
-
-      const packetLength = payloadLengthOffset + 4 + payloadLength
-      if (this.controlBuffer.length < packetLength) return
-
-      const topic = this.controlBuffer.subarray(6, payloadLengthOffset).toString('utf8')
-      this.controlBuffer = this.controlBuffer.subarray(packetLength)
-
-      if (topic === 'APP_ACCESS') this.accessed = true
-      if (topic === 'OPEN_RT_STREAM') {
-        console.log('[WifiCamera] Camera acknowledged OPEN_RT_STREAM')
-      }
-    }
-  }
-
-  private consumeDatagram(datagram: Buffer): void {
-    let cursor = 0
-    while (datagram.length - cursor >= FRAME_HEADER_SIZE) {
-      const header = datagram.subarray(cursor, cursor + FRAME_HEADER_SIZE)
-      const type = header[0] & 0x7f
-      const chunkSize = header.readUInt16LE(2)
-      const sequence = header.readUInt32LE(4)
-      const frameSize = header.readUInt32LE(8)
-      const offset = header.readUInt32LE(12)
-      cursor += FRAME_HEADER_SIZE
-
-      if (
-        chunkSize > datagram.length - cursor ||
-        frameSize === 0 ||
-        frameSize > MAX_FRAME_SIZE ||
-        offset + chunkSize > frameSize
-      ) {
+    while (this.streamBuffer.length > 0) {
+      const start = this.streamBuffer.indexOf(JPEG_START)
+      if (start < 0) {
+        this.streamBuffer = this.streamBuffer.at(-1) === 0xff
+          ? this.streamBuffer.subarray(-1)
+          : Buffer.alloc(0)
         return
       }
 
-      if (type === JPEG_FRAME_TYPE) {
-        this.consumeChunk(
-          sequence,
-          frameSize,
-          offset,
-          Buffer.from(datagram.subarray(cursor, cursor + chunkSize))
-        )
-      }
-      cursor += chunkSize
-    }
-  }
-
-  private consumeChunk(sequence: number, frameSize: number, offset: number, chunk: Buffer): void {
-    let assembly = this.assemblies.get(sequence)
-    if (!assembly || assembly.frameSize !== frameSize) {
-      assembly = { frameSize, chunks: new Map() }
-      this.assemblies.set(sequence, assembly)
-    }
-    if (!assembly.chunks.has(offset)) assembly.chunks.set(offset, chunk)
-
-    const ordered = [...assembly.chunks.entries()].sort(([a], [b]) => a - b)
-    let expectedOffset = 0
-    for (const [chunkOffset, bytes] of ordered) {
-      if (chunkOffset !== expectedOffset) {
-        this.trimAssemblies()
+      if (start > 0) this.streamBuffer = this.streamBuffer.subarray(start)
+      const end = this.streamBuffer.indexOf(JPEG_END, JPEG_START.length)
+      if (end < 0) {
+        if (this.streamBuffer.length > MAX_FRAME_SIZE) {
+          this.handleStreamFailure('Camera JPEG exceeded the maximum frame size')
+        }
         return
       }
-      expectedOffset += bytes.length
-    }
 
-    if (expectedOffset === frameSize) {
-      this.assemblies.delete(sequence)
-      this.queueFrame(
-        Buffer.concat(
-          ordered.map(([, bytes]) => bytes),
-          frameSize
-        )
-      )
+      const frameEnd = end + JPEG_END.length
+      const frame = Buffer.from(this.streamBuffer.subarray(0, frameEnd))
+      this.streamBuffer = this.streamBuffer.subarray(frameEnd)
+      this.queueFrame(frame)
+
+      if (!this.receivedFrame) {
+        this.receivedFrame = true
+        this.sendStatus('streaming', `XIAO camera streaming at ${frameSizeLabel(this.options.frameSize)}`)
+      }
     }
-    this.trimAssemblies()
   }
 
-  private trimAssemblies(): void {
-    while (this.assemblies.size > MAX_ASSEMBLIES) {
-      const oldest = this.assemblies.keys().next().value
-      if (oldest == null) return
-      this.assemblies.delete(oldest)
-    }
+  private handleStreamFailure(message: string): void {
+    if (!this.running) return
+    this.cleanup()
+    this.sendStatus('error', message)
   }
 
   private queueFrame(frame: Buffer): void {
@@ -364,6 +234,62 @@ export class WifiCameraService {
   }
 }
 
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds))
+function requestControl(host: string, variable: string, value: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = http.get(
+      {
+        hostname: host,
+        port: CONTROL_PORT,
+        path: `/control?var=${encodeURIComponent(variable)}&val=${encodeURIComponent(value)}`
+      },
+      response => {
+        response.resume()
+        if (response.statusCode === 200) resolve()
+        else reject(new Error(`Camera ${variable} control returned HTTP ${response.statusCode ?? 'unknown'}`))
+      }
+    )
+    request.setTimeout(5_000, () => request.destroy(new Error('Camera control timed out')))
+    request.once('error', error => reject(new Error(`Camera control: ${error.message}`)))
+  })
+}
+
+function normalizeOptions(options: Partial<WifiCameraOptions> | null | undefined): WifiCameraOptions {
+  return {
+    host: normalizeHost(options?.host),
+    frameSize: normalizeFrameSize(options?.frameSize),
+    jpegQuality: normalizeJpegQuality(options?.jpegQuality)
+  }
+}
+
+function normalizeHost(value: unknown): string {
+  const candidate = String(value ?? '').trim()
+  if (!candidate) return DEFAULT_OPTIONS.host
+
+  try {
+    const url = new URL(candidate.includes('://') ? candidate : `http://${candidate}`)
+    return url.hostname || DEFAULT_OPTIONS.host
+  } catch {
+    return DEFAULT_OPTIONS.host
+  }
+}
+
+function normalizeFrameSize(value: unknown): WifiCameraFrameSize {
+  const frameSize = Number(value)
+  return SUPPORTED_FRAME_SIZES.has(frameSize) ? frameSize as WifiCameraFrameSize : DEFAULT_OPTIONS.frameSize
+}
+
+function normalizeJpegQuality(value: unknown): number {
+  const quality = Math.round(Number(value))
+  if (!Number.isFinite(quality)) return DEFAULT_OPTIONS.jpegQuality
+  return Math.min(63, Math.max(4, quality))
+}
+
+function frameSizeLabel(frameSize: WifiCameraFrameSize): string {
+  switch (frameSize) {
+    case 11: return '1280×720'
+    case 10: return '1024×768'
+    case 9: return '800×600'
+    case 8: return '640×480'
+    case 5: return '320×240'
+  }
 }
