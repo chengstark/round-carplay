@@ -21,6 +21,7 @@ import {
   type WifiCameraOptions,
   type WifiCameraRotation
 } from '../../../main/Globals'
+import type { WifiCameraDiagnostics } from '../../../main/wifi/WifiCameraService'
 import ParkingGuides from './ParkingGuides'
 
 type CameraStatus = {
@@ -45,6 +46,7 @@ export default function WifiCamera({
 }): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rotationRef = useRef<WifiCameraRotation>(rotation)
+  const frameEpochRef = useRef(0)
   const [calibrating, setCalibrating] = useState(false)
   const [draftRotation, setDraftRotation] = useState(rotation)
   const [draftFrameSize, setDraftFrameSize] = useState(cameraOptions.frameSize)
@@ -54,6 +56,16 @@ export default function WifiCamera({
   const [status, setStatus] = useState<CameraStatus>({
     state: 'connecting',
     message: 'Connecting to Wi-Fi camera…'
+  })
+  const [diagnostics, setDiagnostics] = useState<WifiCameraDiagnostics>({
+    state: 'connecting',
+    fps: 0,
+    bitrateKbps: 0,
+    frameSizeKb: 0,
+    lastFrameAgeMs: null,
+    receivedFrames: 0,
+    replacedFrames: 0,
+    reconnectCount: 0
   })
 
   useEffect(() => {
@@ -116,16 +128,33 @@ export default function WifiCamera({
     let active = true
 
     const removeStatusListener = window.carplay.wifiCamera.onStatus((next) => {
-      if (active) setStatus(next)
+      if (!active) return
+      setStatus(next)
+      if (next.state === 'connecting') {
+        frameEpochRef.current += 1
+        setHasFrame(false)
+        const canvas = canvasRef.current
+        const context = canvas?.getContext('2d', { alpha: false })
+        if (canvas && context) {
+          context.setTransform(1, 0, 0, 1, 0, 0)
+          context.fillStyle = '#000'
+          context.fillRect(0, 0, canvas.width, canvas.height)
+        }
+      }
+    })
+
+    const removeDiagnosticsListener = window.carplay.wifiCamera.onDiagnostics((next) => {
+      if (active) setDiagnostics(next)
     })
 
     const removeFrameListener = window.carplay.wifiCamera.onFrame(async (frame) => {
+      const frameEpoch = frameEpochRef.current
       try {
         const bytes = new Uint8Array(frame.byteLength)
         bytes.set(frame)
         const bitmap = await createImageBitmap(new Blob([bytes.buffer], { type: 'image/jpeg' }))
 
-        if (!active) {
+        if (!active || frameEpoch !== frameEpochRef.current) {
           bitmap.close()
           return
         }
@@ -204,6 +233,7 @@ export default function WifiCamera({
       active = false
       removeFrameListener()
       removeStatusListener()
+      removeDiagnosticsListener()
       window.carplay.wifiCamera.stop().catch((error) => {
         console.warn('[WifiCamera] Stop failed', error)
       })
@@ -219,6 +249,61 @@ export default function WifiCamera({
         background: '#000'
       }}
     >
+      <div
+        aria-label="Camera connection diagnostics"
+        style={{
+          position: 'absolute',
+          top: '2.5%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 8,
+          width: '78%',
+          padding: '5px 10px',
+          borderRadius: 10,
+          color: '#fff',
+          background: 'rgba(0,0,0,0.68)',
+          boxShadow: '0 1px 7px rgba(0,0,0,0.45)',
+          textAlign: 'center',
+          fontSize: 11,
+          lineHeight: 1.35,
+          fontVariantNumeric: 'tabular-nums',
+          pointerEvents: 'none'
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ color: diagnostics.state === 'streaming' ? '#62dc78' : '#ffd166' }}>
+            ● {diagnosticStateLabel(diagnostics.state)}
+          </span>
+          <span>{diagnostics.fps.toFixed(1)} FPS</span>
+          <span>{Math.round(diagnostics.bitrateKbps)} kb/s</span>
+          <span>{diagnostics.frameSizeKb.toFixed(1)} KB/frame</span>
+        </div>
+        <div style={{ marginTop: 1, opacity: 0.88 }}>
+          {diagnostics.ssid ?? diagnostics.interface ?? 'Wi-Fi link pending'}
+          {diagnostics.signalDbm != null && (
+            <span style={{ color: signalColor(diagnostics.signalDbm) }}>
+              {' '}
+              • {diagnostics.signalDbm.toFixed(0)} dBm
+            </span>
+          )}
+          {diagnostics.txBitrateMbps != null && (
+            <span> • TX {diagnostics.txBitrateMbps.toFixed(1)} Mb/s</span>
+          )}
+          {diagnostics.rxBitrateMbps != null && (
+            <span> • RX {diagnostics.rxBitrateMbps.toFixed(1)} Mb/s</span>
+          )}
+          {diagnostics.powerSave != null && (
+            <span style={{ color: diagnostics.powerSave ? '#ff9a9a' : '#9ee6a9' }}>
+              {' '}
+              • PS {diagnostics.powerSave ? 'ON' : 'OFF'}
+            </span>
+          )}
+          {diagnostics.reconnectCount > 0 && (
+            <span> • reconnects {diagnostics.reconnectCount}</span>
+          )}
+        </div>
+      </div>
+
       <div
         style={{
           position: 'absolute',
@@ -474,4 +559,17 @@ export default function WifiCamera({
       )}
     </div>
   )
+}
+
+function signalColor(signalDbm: number): string {
+  if (signalDbm >= -60) return '#9ee6a9'
+  if (signalDbm >= -72) return '#ffe08a'
+  return '#ff9a9a'
+}
+
+function diagnosticStateLabel(state: WifiCameraDiagnostics['state']): string {
+  if (state === 'streaming') return 'LIVE'
+  if (state === 'connecting') return 'RECONNECTING'
+  if (state === 'error') return 'ERROR'
+  return 'STOPPED'
 }

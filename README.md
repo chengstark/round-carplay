@@ -32,7 +32,11 @@ CarPlay must be connected to the XIAO camera's Wi-Fi network. The application
 configures the camera through `http://192.168.4.1/control` and receives standard
 multipart MJPEG from `http://192.168.4.1:81/stream`. Stream connection and saved
 camera configuration begin together, allowing the first frame to appear without
-waiting for both control requests to finish.
+waiting for both control requests to finish. A compact live strip at the top of
+the camera screen reports stream state, FPS, data rate, frame size, Wi-Fi SSID,
+signal strength, link rates, power-saving state, and reconnect count. If the
+MJPEG feed closes or stops producing frames, the frozen image is cleared and the
+application reconnects automatically.
 The complete 16:9 camera image is displayed as the largest rectangle that fits
 inside the circular screen, so none of the source frame is cropped. The camera
 can be rotated continuously from `0°` through `359°`; the slider and `−1°` /
@@ -48,7 +52,9 @@ exit button at the upper left.
 
 No XIAO firmware update is required for these tuning controls. Round CarPlay
 sends the selected frame size, JPEG compression, and horizontal-mirror state to
-the firmware's existing HTTP `/control` endpoint whenever the camera opens.
+the firmware's existing HTTP `/control` endpoint whenever the camera opens. The
+Pi setup script also disables Wi-Fi power saving through NetworkManager and at
+kiosk startup to reduce latency spikes and dropouts.
 
 The Camera tab continues to support ordinary USB cameras through the browser
 media-device API. The standalone low-latency SDL diagnostic viewer remains in

@@ -38,11 +38,12 @@ mkdir -p "$APPIMAGE_DIR"
 
 # Ensure required tools are installed. Cage replaces the full desktop with a
 # single-application Wayland session.
-echo "→ Checking for required tools: curl, xdg-user-dir, cage"
+echo "→ Checking for required tools: curl, xdg-user-dir, cage, iw"
 missing_packages=()
 command -v curl >/dev/null 2>&1 || missing_packages+=(curl)
 command -v xdg-user-dir >/dev/null 2>&1 || missing_packages+=(xdg-user-dirs)
 command -v cage >/dev/null 2>&1 || missing_packages+=(cage)
+command -v iw >/dev/null 2>&1 || missing_packages+=(iw)
 
 if [ "${#missing_packages[@]}" -gt 0 ]; then
   sudo apt-get update
@@ -50,6 +51,28 @@ if [ "${#missing_packages[@]}" -gt 0 ]; then
 else
   echo "   All required tools found"
 fi
+
+# Keep the Pi's Wi-Fi radio awake while it receives the camera's MJPEG stream.
+# NetworkManager applies this to future connections, while the boot helper below
+# also covers already-active wireless interfaces before the kiosk launches.
+echo "→ Disabling Wi-Fi power saving for camera reliability"
+sudo install -d -m 0755 /etc/NetworkManager/conf.d
+sudo tee /etc/NetworkManager/conf.d/20-round-carplay-wifi-powersave.conf >/dev/null <<'EOF'
+[connection]
+wifi.powersave=2
+EOF
+
+sudo tee /usr/local/sbin/round-carplay-wifi-performance >/dev/null <<'EOF'
+#!/usr/bin/env bash
+set -u
+
+for interface_path in /sys/class/net/wl*; do
+  [ -e "$interface_path" ] || continue
+  interface_name="${interface_path##*/}"
+  /usr/sbin/iw dev "$interface_name" set power_save off 2>/dev/null || true
+done
+EOF
+sudo chmod 0755 /usr/local/sbin/round-carplay-wifi-performance
 
 # Create udev rule for Carlinkit dongle
 echo "→ Writing udev rule"
@@ -164,6 +187,7 @@ Environment="XDG_CURRENT_DESKTOP=round-carplay"
 Environment="ELECTRON_OZONE_PLATFORM_HINT=wayland"
 Environment="WLR_LIBINPUT_NO_DEVICES=1"
 Environment="NO_AT_BRIDGE=1"
+ExecStartPre=+/usr/local/sbin/round-carplay-wifi-performance
 ExecStart=/usr/bin/cage -- "$APPIMAGE_PATH" --ozone-platform=wayland --disable-notifications
 ExecStartPost=+/usr/bin/chvt 1
 Restart=always

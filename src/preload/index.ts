@@ -12,7 +12,10 @@ import type {
   SystemUpdateStatus
 } from '../main/update/SystemUpdateService'
 import type { WifiCameraOptions } from '../main/Globals'
-import type { WifiCameraStartResult } from '../main/wifi/WifiCameraService'
+import type {
+  WifiCameraDiagnostics,
+  WifiCameraStartResult
+} from '../main/wifi/WifiCameraService'
 
 type ApiCallback<T = any> = (event: IpcRendererEvent, ...args: T[]) => void
 
@@ -104,6 +107,13 @@ export const api = {
       const listener = (_event: IpcRendererEvent, status: any) => callback(status)
       ipcRenderer.on('wifi-camera-status', listener)
       return () => ipcRenderer.removeListener('wifi-camera-status', listener)
+    },
+    onDiagnostics: (callback: (diagnostics: WifiCameraDiagnostics) => void) => {
+      const listener = (_event: IpcRendererEvent, diagnostics: WifiCameraDiagnostics) => {
+        callback(diagnostics)
+      }
+      ipcRenderer.on('wifi-camera-diagnostics', listener)
+      return () => ipcRenderer.removeListener('wifi-camera-diagnostics', listener)
     }
   },
 
