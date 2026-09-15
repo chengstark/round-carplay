@@ -54,7 +54,9 @@ No XIAO firmware update is required for these tuning controls. Round CarPlay
 sends the selected frame size, JPEG compression, and horizontal-mirror state to
 the firmware's existing HTTP `/control` endpoint whenever the camera opens. The
 Pi setup script also disables Wi-Fi power saving through NetworkManager and at
-kiosk startup to reduce latency spikes and dropouts.
+kiosk startup to reduce latency spikes and dropouts. Wi-Fi networks selected
+through the on-display system menu are saved as preferred, persistent
+NetworkManager profiles with unlimited automatic reconnect attempts.
 
 The Camera tab continues to support ordinary USB cameras through the browser
 media-device API. The standalone low-latency SDL diagnostic viewer remains in

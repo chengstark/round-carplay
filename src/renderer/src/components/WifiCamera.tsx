@@ -253,53 +253,74 @@ export default function WifiCamera({
         aria-label="Camera connection diagnostics"
         style={{
           position: 'absolute',
-          top: '2.5%',
+          bottom: '5.5%',
           left: '50%',
           transform: 'translateX(-50%)',
           zIndex: 8,
-          width: '78%',
-          padding: '5px 10px',
-          borderRadius: 10,
+          width: '42%',
+          minWidth: 180,
+          maxWidth: 204,
+          boxSizing: 'border-box',
+          padding: '5px 11px 6px',
+          borderRadius: '50%',
           color: '#fff',
-          background: 'rgba(0,0,0,0.68)',
+          background: 'rgba(0,0,0,0.72)',
           boxShadow: '0 1px 7px rgba(0,0,0,0.45)',
           textAlign: 'center',
-          fontSize: 11,
-          lineHeight: 1.35,
+          fontSize: 9,
+          lineHeight: 1.25,
           fontVariantNumeric: 'tabular-nums',
           pointerEvents: 'none'
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 5,
+            whiteSpace: 'nowrap'
+          }}
+        >
           <span style={{ color: diagnostics.state === 'streaming' ? '#62dc78' : '#ffd166' }}>
             ● {diagnosticStateLabel(diagnostics.state)}
           </span>
-          <span>{diagnostics.fps.toFixed(1)} FPS</span>
-          <span>{Math.round(diagnostics.bitrateKbps)} kb/s</span>
-          <span>{diagnostics.frameSizeKb.toFixed(1)} KB/frame</span>
-        </div>
-        <div style={{ marginTop: 1, opacity: 0.88 }}>
-          {diagnostics.ssid ?? diagnostics.interface ?? 'Wi-Fi link pending'}
+          <span>· {diagnostics.fps.toFixed(1)} FPS</span>
           {diagnostics.signalDbm != null && (
             <span style={{ color: signalColor(diagnostics.signalDbm) }}>
-              {' '}
-              • {diagnostics.signalDbm.toFixed(0)} dBm
+              · {diagnostics.signalDbm.toFixed(0)} dBm
             </span>
           )}
-          {diagnostics.txBitrateMbps != null && (
-            <span> • TX {diagnostics.txBitrateMbps.toFixed(1)} Mb/s</span>
-          )}
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 4,
+            marginTop: 1,
+            opacity: 0.88,
+            whiteSpace: 'nowrap'
+          }}
+        >
+          <span
+            style={{
+              maxWidth: 70,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}
+          >
+            {diagnostics.ssid ?? diagnostics.interface ?? 'Wi-Fi…'}
+          </span>
+          <span>· {Math.round(diagnostics.bitrateKbps)} kb/s</span>
           {diagnostics.rxBitrateMbps != null && (
-            <span> • RX {diagnostics.rxBitrateMbps.toFixed(1)} Mb/s</span>
+            <span>· RX {diagnostics.rxBitrateMbps.toFixed(0)}</span>
           )}
-          {diagnostics.powerSave != null && (
-            <span style={{ color: diagnostics.powerSave ? '#ff9a9a' : '#9ee6a9' }}>
-              {' '}
-              • PS {diagnostics.powerSave ? 'ON' : 'OFF'}
-            </span>
+          {diagnostics.powerSave && (
+            <span style={{ color: '#ff9a9a' }}>· PS!</span>
           )}
           {diagnostics.reconnectCount > 0 && (
-            <span> • reconnects {diagnostics.reconnectCount}</span>
+            <span>· R{diagnostics.reconnectCount}</span>
           )}
         </div>
       </div>
@@ -569,7 +590,7 @@ function signalColor(signalDbm: number): string {
 
 function diagnosticStateLabel(state: WifiCameraDiagnostics['state']): string {
   if (state === 'streaming') return 'LIVE'
-  if (state === 'connecting') return 'RECONNECTING'
-  if (state === 'error') return 'ERROR'
-  return 'STOPPED'
+  if (state === 'connecting') return 'RETRY'
+  if (state === 'error') return 'ERR'
+  return 'OFF'
 }

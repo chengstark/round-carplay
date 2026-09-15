@@ -89,9 +89,17 @@ export class NetworkService {
 
     try {
       await runNmcli(args)
+      let profileSaved = true
+      try {
+        await persistActiveWifiProfile(cleanSsid, password)
+      } catch {
+        profileSaved = false
+      }
       return {
         ok: true,
-        message: `Connected to ${cleanSsid}`,
+        message: profileSaved
+          ? `Connected to ${cleanSsid}; password saved for automatic reconnect`
+          : `Connected to ${cleanSsid}, but NetworkManager could not save automatic reconnect`,
         ipAddresses: this.getIpAddresses()
       }
     } catch (error) {
@@ -121,6 +129,63 @@ export class NetworkService {
       return aWifi - bWifi || a.interface.localeCompare(b.interface)
     })
   }
+}
+
+async function persistActiveWifiProfile(ssid: string, password: string): Promise<void> {
+  const { stdout } = await runNmcli([
+    '--terse',
+    '--escape',
+    'no',
+    '--fields',
+    'UUID,TYPE',
+    'connection',
+    'show',
+    '--active'
+  ])
+  const activeWifiUuids = stdout
+    .split(/\r?\n/)
+    .map(line => line.split(':'))
+    .filter(([, type]) => type === '802-11-wireless' || type === 'wifi')
+    .map(([uuid]) => uuid)
+    .filter(Boolean)
+  let uuid: string | undefined
+  for (const candidate of activeWifiUuids) {
+    const profile = await runNmcli([
+      '--get-values',
+      '802-11-wireless.ssid',
+      'connection',
+      'show',
+      'uuid',
+      candidate
+    ])
+    if (profile.stdout.trim() === ssid) {
+      uuid = candidate
+      break
+    }
+  }
+  if (!uuid) throw new Error('No active Wi-Fi profile was found')
+
+  const args = [
+    'connection',
+    'modify',
+    'uuid',
+    uuid,
+    'connection.autoconnect',
+    'yes',
+    'connection.autoconnect-priority',
+    '100',
+    'connection.autoconnect-retries',
+    '0'
+  ]
+  if (password) {
+    args.push(
+      '802-11-wireless-security.psk-flags',
+      '0',
+      '802-11-wireless-security.psk',
+      password
+    )
+  }
+  await runNmcli(args)
 }
 
 export function parseWifiList(output: string): WifiNetwork[] {
