@@ -30,7 +30,9 @@ The right-side crescent button opens the integrated XIAO ESP32-S3 Wi-Fi backup
 camera. Double-tap the button to open or close the feed. The host running Round
 CarPlay must be connected to the XIAO camera's Wi-Fi network. The application
 configures the camera through `http://192.168.4.1/control` and receives standard
-multipart MJPEG from `http://192.168.4.1:81/stream`.
+multipart MJPEG from `http://192.168.4.1:81/stream`. Stream connection and saved
+camera configuration begin together, allowing the first frame to appear without
+waiting for both control requests to finish.
 The complete 16:9 camera image is displayed as the largest rectangle that fits
 inside the circular screen, so none of the source frame is cropped. The camera
 can be rotated continuously from `0°` through `359°`; the slider and `−1°` /

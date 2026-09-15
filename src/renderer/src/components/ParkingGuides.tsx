@@ -1,13 +1,13 @@
 const GUIDE_SEGMENTS = [
   { color: '#38d05b', path: 'M 425 390 L 365 555' },
   { color: '#38d05b', path: 'M 575 390 L 635 555' },
-  { color: '#38d05b', path: 'M 365 555 Q 500 525 635 555' },
+  { color: '#38d05b', path: 'M 365 555 L 635 555' },
   { color: '#ffd43b', path: 'M 365 555 L 285 720' },
   { color: '#ffd43b', path: 'M 635 555 L 715 720' },
-  { color: '#ffd43b', path: 'M 285 720 Q 500 665 715 720' },
+  { color: '#ffd43b', path: 'M 285 720 L 715 720' },
   { color: '#ef3f3f', path: 'M 285 720 L 180 880' },
   { color: '#ef3f3f', path: 'M 715 720 L 820 880' },
-  { color: '#ef3f3f', path: 'M 180 880 Q 500 790 820 880' }
+  { color: '#ef3f3f', path: 'M 180 880 L 820 880' }
 ] as const
 
 /**
@@ -37,12 +37,18 @@ export default function ParkingGuides(): React.JSX.Element {
           <path
             key={`outline-${index}`}
             d={path}
-            stroke="rgba(0,0,0,0.72)"
-            strokeWidth="22"
+            stroke="rgba(0,0,0,0.42)"
+            strokeWidth="14"
           />
         ))}
         {GUIDE_SEGMENTS.map(({ color, path }, index) => (
-          <path key={`guide-${index}`} d={path} stroke={color} strokeWidth="11" />
+          <path
+            key={`guide-${index}`}
+            d={path}
+            stroke={color}
+            strokeWidth="6"
+            opacity="0.68"
+          />
         ))}
       </g>
     </svg>

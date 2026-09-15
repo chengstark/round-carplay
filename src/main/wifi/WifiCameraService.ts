@@ -63,13 +63,19 @@ export class WifiCameraService {
     this.pendingFrame = null
     this.streamBuffer = Buffer.alloc(0)
     this.receivedFrame = false
-    this.sendStatus('connecting', `Connecting to XIAO camera at ${this.options.host}…`)
+    this.sendStatus('connecting', `Opening XIAO camera at ${this.options.host}…`)
 
     try {
-      await this.applyCameraSettings(this.options)
-      if (!this.running) throw new Error('Camera start cancelled')
-      this.sendStatus('connecting', 'Opening XIAO camera video…')
-      await this.openStream()
+      // The live tuning panel already changes sensor settings during an active
+      // stream, so startup can safely do the same. Open MJPEG immediately while
+      // still enforcing the app's saved resolution and quality in parallel.
+      // Frame delivery is event-driven and does not wait for Promise.all, which
+      // lets the renderer leave the black connecting screen as soon as the first
+      // complete JPEG arrives.
+      await Promise.all([
+        this.openStream(),
+        this.applyCameraSettings(this.options)
+      ])
       return { ok: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
