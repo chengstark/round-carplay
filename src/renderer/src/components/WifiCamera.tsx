@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { FormControl, IconButton, MenuItem, Select, Slider, Stack, Typography } from '@mui/material'
+import {
+  FormControl,
+  FormControlLabel,
+  IconButton,
+  MenuItem,
+  Select,
+  Slider,
+  Stack,
+  Switch,
+  Typography
+} from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
@@ -39,6 +49,7 @@ export default function WifiCamera({
   const [draftRotation, setDraftRotation] = useState(rotation)
   const [draftFrameSize, setDraftFrameSize] = useState(cameraOptions.frameSize)
   const [draftJpegQuality, setDraftJpegQuality] = useState(cameraOptions.jpegQuality)
+  const [draftHorizontalFlip, setDraftHorizontalFlip] = useState(cameraOptions.horizontalFlip)
   const [hasFrame, setHasFrame] = useState(false)
   const [status, setStatus] = useState<CameraStatus>({
     state: 'connecting',
@@ -56,8 +67,14 @@ export default function WifiCamera({
     if (!calibrating) {
       setDraftFrameSize(cameraOptions.frameSize)
       setDraftJpegQuality(cameraOptions.jpegQuality)
+      setDraftHorizontalFlip(cameraOptions.horizontalFlip)
     }
-  }, [cameraOptions.frameSize, cameraOptions.jpegQuality, calibrating])
+  }, [
+    cameraOptions.frameSize,
+    cameraOptions.jpegQuality,
+    cameraOptions.horizontalFlip,
+    calibrating
+  ])
 
   const updateDraftRotation = (value: number): void => {
     const rounded = Math.round(value)
@@ -80,11 +97,13 @@ export default function WifiCamera({
 
   const applyCameraTuning = async (
     frameSize: WifiCameraFrameSize,
-    jpegQuality: number
+    jpegQuality: number,
+    horizontalFlip: boolean
   ): Promise<void> => {
-    const next = { ...cameraOptions, frameSize, jpegQuality }
+    const next = { ...cameraOptions, frameSize, jpegQuality, horizontalFlip }
     setDraftFrameSize(frameSize)
     setDraftJpegQuality(jpegQuality)
+    setDraftHorizontalFlip(horizontalFlip)
     onCameraOptionsSave(next)
 
     const result = await window.carplay.wifiCamera.configure(next)
@@ -382,7 +401,7 @@ export default function WifiCamera({
                 value={draftFrameSize}
                 onChange={event => {
                   const frameSize = Number(event.target.value) as WifiCameraFrameSize
-                  void applyCameraTuning(frameSize, draftJpegQuality)
+                  void applyCameraTuning(frameSize, draftJpegQuality, draftHorizontalFlip)
                 }}
                 sx={{
                   color: '#fff',
@@ -414,13 +433,31 @@ export default function WifiCamera({
                 }}
                 onChangeCommitted={(_, value) => {
                   if (typeof value === 'number') {
-                    void applyCameraTuning(draftFrameSize, value)
+                    void applyCameraTuning(draftFrameSize, value, draftHorizontalFlip)
                   }
                 }}
                 sx={{ color: '#e6e3db' }}
               />
             </div>
           </Stack>
+          <FormControlLabel
+            control={(
+              <Switch
+                checked={draftHorizontalFlip}
+                onChange={(_, checked) => {
+                  void applyCameraTuning(draftFrameSize, draftJpegQuality, checked)
+                }}
+                sx={{
+                  '& .MuiSwitch-switchBase.Mui-checked': { color: '#e6e3db' },
+                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                    backgroundColor: '#8f989f'
+                  }
+                }}
+              />
+            )}
+            label="Mirror image (horizontal flip)"
+            sx={{ display: 'flex', justifyContent: 'center', mx: 0, mt: 0.5 }}
+          />
           <Typography variant="caption" display="block" align="center" sx={{ opacity: 0.72 }}>
             Higher compression values usually reduce latency. Changes apply live and are saved.
           </Typography>

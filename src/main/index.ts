@@ -162,6 +162,7 @@ function loadConfig(): ExtraConfig {
     wifiCameraHost: '192.168.4.1',
     wifiCameraFrameSize: 11,
     wifiCameraJpegQuality: 20,
+    wifiCameraHorizontalFlip: false,
     gpsSmoothing: 0.55,
     microphone: '',
     nightMode: true,
@@ -180,6 +181,7 @@ function loadConfig(): ExtraConfig {
   merged.wifiCameraHost = normalizeWifiCameraHost(merged.wifiCameraHost)
   merged.wifiCameraFrameSize = normalizeWifiCameraFrameSize(merged.wifiCameraFrameSize)
   merged.wifiCameraJpegQuality = normalizeWifiCameraJpegQuality(merged.wifiCameraJpegQuality)
+  merged.wifiCameraHorizontalFlip = normalizeWifiCameraHorizontalFlip(merged.wifiCameraHorizontalFlip)
   merged.gpsSmoothing = normalizeGpsSmoothing(merged.gpsSmoothing)
 
   const needWrite = !existsSync(configPath) || JSON.stringify(fileConfig) !== JSON.stringify(merged)
@@ -384,6 +386,7 @@ function saveSettings(settings: ExtraConfig) {
         wifiCameraHost: normalizeWifiCameraHost(settings.wifiCameraHost),
         wifiCameraFrameSize: normalizeWifiCameraFrameSize(settings.wifiCameraFrameSize),
         wifiCameraJpegQuality: normalizeWifiCameraJpegQuality(settings.wifiCameraJpegQuality),
+        wifiCameraHorizontalFlip: normalizeWifiCameraHorizontalFlip(settings.wifiCameraHorizontalFlip),
         gpsSmoothing: normalizeGpsSmoothing(settings.gpsSmoothing)
       },
       null,
@@ -436,6 +439,10 @@ function normalizeWifiCameraJpegQuality(value: unknown): number {
   const quality = Math.round(Number(value))
   if (!Number.isFinite(quality)) return 20
   return Math.min(63, Math.max(4, quality))
+}
+
+function normalizeWifiCameraHorizontalFlip(value: unknown): boolean {
+  return value === true
 }
 
 function normalizeGpsSmoothing(value: unknown): number {

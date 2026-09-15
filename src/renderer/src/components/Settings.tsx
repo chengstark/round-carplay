@@ -329,6 +329,18 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
             </FormControl>
           </Grid>
 
+          <Grid size={{ xs: 3 }} sx={{ minWidth: 180, mx: 2, display: 'flex', alignItems: 'center' }}>
+            <FormControlLabel
+              control={(
+                <Checkbox
+                  checked={activeSettings.wifiCameraHorizontalFlip}
+                  onChange={event => settingsChange('wifiCameraHorizontalFlip', event.target.checked)}
+                />
+              )}
+              label="WI-FI CAMERA HORIZONTAL FLIP"
+            />
+          </Grid>
+
           <Grid size={{ xs: 3 }} sx={{ minWidth: 140, mx: 2, display: 'flex', justifyContent: 'center' }}>
             <FormControl fullWidth><FormLabel>MICROPHONE</FormLabel><RadioGroup value={activeSettings.micType} onChange={e => settingsChange('micType', e.target.value)}><Stack direction="column"><FormControlLabel value="os" control={<Radio />} label={<Typography noWrap>OS: {micLabel}</Typography>} /><FormControlLabel value="box" control={<Radio />} label="BOX" /></Stack></RadioGroup></FormControl>
           </Grid>

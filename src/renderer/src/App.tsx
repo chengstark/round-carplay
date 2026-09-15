@@ -626,7 +626,8 @@ function App() {
               cameraOptions={{
                 host: settings?.wifiCameraHost ?? '192.168.4.1',
                 frameSize: settings?.wifiCameraFrameSize ?? 11,
-                jpegQuality: settings?.wifiCameraJpegQuality ?? 20
+                jpegQuality: settings?.wifiCameraJpegQuality ?? 20,
+                horizontalFlip: settings?.wifiCameraHorizontalFlip ?? false
               }}
               onRotationSave={rotation => {
                 if (settings) saveSettings({ ...settings, wifiCameraRotation: rotation });
@@ -637,7 +638,8 @@ function App() {
                     ...settings,
                     wifiCameraHost: options.host,
                     wifiCameraFrameSize: options.frameSize,
-                    wifiCameraJpegQuality: options.jpegQuality
+                    wifiCameraJpegQuality: options.jpegQuality,
+                    wifiCameraHorizontalFlip: options.horizontalFlip
                   });
                 }
               }}

@@ -5,7 +5,8 @@ import type { WifiCameraFrameSize, WifiCameraOptions } from '../Globals'
 const DEFAULT_OPTIONS: WifiCameraOptions = {
   host: '192.168.4.1',
   frameSize: 11,
-  jpegQuality: 20
+  jpegQuality: 20,
+  horizontalFlip: false
 }
 const CONTROL_PORT = 80
 const STREAM_PORT = 81
@@ -89,6 +90,9 @@ export class WifiCameraService {
   async configure(options: WifiCameraOptions): Promise<WifiCameraStartResult> {
     const normalized = normalizeOptions(options)
     const hostChanged = normalized.host !== this.options.host
+    const imageTuningChanged = normalized.frameSize !== this.options.frameSize ||
+      normalized.jpegQuality !== this.options.jpegQuality
+    const mirrorChanged = normalized.horizontalFlip !== this.options.horizontalFlip
     this.options = normalized
 
     if (!this.running) return { ok: true }
@@ -102,7 +106,12 @@ export class WifiCameraService {
     try {
       await this.applyCameraSettings(normalized)
       if (this.running) {
-        this.sendStatus('streaming', `Camera tuned to ${frameSizeLabel(normalized.frameSize)}`)
+        const message = imageTuningChanged
+          ? `Camera tuned to ${frameSizeLabel(normalized.frameSize)}`
+          : mirrorChanged
+            ? `Camera mirror ${normalized.horizontalFlip ? 'enabled' : 'disabled'}`
+            : 'Camera settings updated'
+        this.sendStatus('streaming', message)
       }
       return { ok: true }
     } catch (error) {
@@ -141,6 +150,7 @@ export class WifiCameraService {
   private async applyCameraSettings(options: WifiCameraOptions): Promise<void> {
     await requestControl(options.host, 'framesize', options.frameSize)
     await requestControl(options.host, 'quality', options.jpegQuality)
+    await requestControl(options.host, 'hmirror', options.horizontalFlip ? 1 : 0)
   }
 
   private openStream(): Promise<void> {
@@ -263,7 +273,8 @@ function normalizeOptions(options: Partial<WifiCameraOptions> | null | undefined
   return {
     host: normalizeHost(options?.host),
     frameSize: normalizeFrameSize(options?.frameSize),
-    jpegQuality: normalizeJpegQuality(options?.jpegQuality)
+    jpegQuality: normalizeJpegQuality(options?.jpegQuality),
+    horizontalFlip: options?.horizontalFlip === true
   }
 }
 

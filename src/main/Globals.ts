@@ -8,6 +8,7 @@ export type ExtraConfig = DongleConfig & {
   wifiCameraHost: string,
   wifiCameraFrameSize: WifiCameraFrameSize,
   wifiCameraJpegQuality: number,
+  wifiCameraHorizontalFlip: boolean,
   gpsSmoothing: number,
   microphone: string,
   bindings: KeyBindings,
@@ -38,6 +39,7 @@ export type WifiCameraOptions = {
   host: string
   frameSize: WifiCameraFrameSize
   jpegQuality: number
+  horizontalFlip: boolean
 }
 
 export interface KeyBindings {

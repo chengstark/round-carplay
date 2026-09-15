@@ -38,17 +38,17 @@ inside the circular screen, so none of the source frame is cropped. The camera
 can be rotated continuously from `0°` through `359°`; the slider and `−1°` /
 `+1°` buttons support coarse and fine adjustment, and the selection is saved
 across restarts. For visual calibration, tap the adjustment button at the top
-center of the live feed. Resolution and JPEG compression can also be tuned from
-that panel while video is streaming; changes apply immediately and persist in
-the application config. HD `1280×720`, matching the previous JieLi camera, is
-the default. Lower resolutions and higher compression values are available when
-lower latency is more important than detail. While the camera is open it covers
-the clock and surround controls and provides a dedicated exit button at the
-upper left.
+center of the live feed. Resolution, JPEG compression, and horizontal mirroring
+can also be tuned from that panel while video is streaming; changes apply
+immediately and persist in the application config. HD `1280×720`, matching the
+previous JieLi camera, is the default. Lower resolutions and higher compression
+values are available when lower latency is more important than detail. While the
+camera is open it covers the clock and surround controls and provides a dedicated
+exit button at the upper left.
 
 No XIAO firmware update is required for these tuning controls. Round CarPlay
-sends the selected frame size and JPEG compression to the firmware's existing
-HTTP `/control` endpoint whenever the camera opens.
+sends the selected frame size, JPEG compression, and horizontal-mirror state to
+the firmware's existing HTTP `/control` endpoint whenever the camera opens.
 
 The Camera tab continues to support ordinary USB cameras through the browser
 media-device API. The standalone low-latency SDL diagnostic viewer remains in
