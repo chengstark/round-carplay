@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { createReadStream, type ReadStream } from 'node:fs'
-import type { WebContents } from 'electron'
+import { NULL_EVENT_SINK, type ServiceEventSink } from '../events/ServiceEventSink'
 
 const DEFAULT_DEVICE = '/dev/serial0'
 const GPS_BAUD = '9600'
@@ -30,7 +30,6 @@ type ParsedNmea = {
  * Linux character device directly.
  */
 export class GpsService {
-  private renderer: WebContents | null = null
   private stream: ReadStream | null = null
   private lineBuffer = ''
   private running = false
@@ -49,12 +48,10 @@ export class GpsService {
         : 'GPS is available on the Raspberry Pi build'
   }
 
-  constructor(private readonly devicePath = DEFAULT_DEVICE) {}
-
-  attachRenderer(renderer: WebContents): void {
-    this.renderer = renderer
-    this.sendState()
-  }
+  constructor(
+    private readonly devicePath = DEFAULT_DEVICE,
+    private readonly events: ServiceEventSink = NULL_EVENT_SINK
+  ) {}
 
   getState(): GpsState {
     return { ...this.state }
@@ -183,9 +180,7 @@ export class GpsService {
   }
 
   private sendState(): void {
-    if (this.renderer && !this.renderer.isDestroyed()) {
-      this.renderer.send('gps-state', this.getState())
-    }
+    this.events.send('gps-state', this.getState())
   }
 }
 

@@ -18,8 +18,10 @@ import CloseIcon from '@mui/icons-material/Close'
 import LockIcon from '@mui/icons-material/Lock'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt'
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz'
 import WifiIcon from '@mui/icons-material/Wifi'
 import type { IpAddress, WifiNetwork } from '../../../main/network/NetworkService'
+import type { RuntimeSwitchStatus } from '../../../main/runtime/RuntimeSwitchService'
 import type { SystemUpdateStatus } from '../../../main/update/SystemUpdateService'
 
 const BACKGROUND_PRESETS = ['#000000', '#1b1f23', '#17324d', '#556b5f', '#a0bacc', '#8b7355']
@@ -52,6 +54,14 @@ export default function SystemMenu({
   })
   const [rebootConfirmationOpen, setRebootConfirmationOpen] = useState(false)
   const [rebooting, setRebooting] = useState(false)
+  const [runtimeConfirmationOpen, setRuntimeConfirmationOpen] = useState(false)
+  const [runtimeSwitching, setRuntimeSwitching] = useState(false)
+  const [runtimeStatus, setRuntimeStatus] = useState<RuntimeSwitchStatus>({
+    current: 'electron',
+    target: 'browser',
+    available: false,
+    message: 'Checking browser version…'
+  })
   const [gpsSmoothingDraft, setGpsSmoothingDraft] = useState(gpsSmoothing)
 
   useEffect(() => {
@@ -69,6 +79,30 @@ export default function SystemMenu({
       setMessage(error instanceof Error ? error.message : String(error))
     } finally {
       setScanning(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+
+    window.carplay.runtime
+      .getStatus()
+      .then((status) => {
+        if (active) setRuntimeStatus(status)
+      })
+      .catch((error) => {
+        if (active) {
+          setRuntimeStatus({
+            current: 'electron',
+            target: 'browser',
+            available: false,
+            message: error instanceof Error ? error.message : String(error)
+          })
+        }
+      })
+
+    return () => {
+      active = false
     }
   }, [])
 
@@ -154,6 +188,24 @@ export default function SystemMenu({
         message: error instanceof Error ? error.message : String(error)
       })
       setRebooting(false)
+    }
+  }
+
+  const switchRuntime = async (): Promise<void> => {
+    setRuntimeConfirmationOpen(false)
+    setRuntimeSwitching(true)
+    try {
+      const result = await window.carplay.runtime.switchTo(runtimeStatus.target)
+      if (!result.ok) {
+        setRuntimeStatus((status) => ({ ...status, message: result.message }))
+        setRuntimeSwitching(false)
+      }
+    } catch (error) {
+      setRuntimeStatus((status) => ({
+        ...status,
+        message: error instanceof Error ? error.message : String(error)
+      }))
+      setRuntimeSwitching(false)
     }
   }
 
@@ -470,6 +522,48 @@ export default function SystemMenu({
         IP · {currentIp}
       </Typography>
 
+      <Box sx={{ flex: '0 0 auto', mt: 0.6 }}>
+        {!runtimeStatus.available && (
+          <Typography
+            variant="caption"
+            title={runtimeStatus.message}
+            sx={{
+              display: 'block',
+              mb: 0.35,
+              overflow: 'hidden',
+              color: 'rgba(255,255,255,0.58)',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {runtimeStatus.message}
+          </Typography>
+        )}
+        <Button
+          variant="outlined"
+          size="small"
+          fullWidth
+          disabled={!runtimeStatus.available || runtimeSwitching || updating}
+          onClick={() => setRuntimeConfirmationOpen(true)}
+          startIcon={
+            runtimeSwitching ? (
+              <CircularProgress size={15} color="inherit" />
+            ) : (
+              <SwapHorizIcon fontSize="small" />
+            )
+          }
+          sx={{
+            height: 32,
+            color: '#fff',
+            borderColor: 'rgba(255,255,255,0.4)'
+          }}
+        >
+          {runtimeSwitching
+            ? 'Switching…'
+            : `Switch to ${runtimeStatus.target === 'electron' ? 'Electron' : 'Browser'} version`}
+        </Button>
+      </Box>
+
       <Dialog
         open={rebootConfirmationOpen}
         onClose={() => setRebootConfirmationOpen(false)}
@@ -485,6 +579,27 @@ export default function SystemMenu({
           <Button onClick={() => setRebootConfirmationOpen(false)}>Cancel</Button>
           <Button variant="contained" color="error" onClick={reboot} autoFocus>
             Reboot
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={runtimeConfirmationOpen}
+        onClose={() => setRuntimeConfirmationOpen(false)}
+        aria-labelledby="runtime-switch-confirmation-title"
+      >
+        <DialogTitle id="runtime-switch-confirmation-title">Switch versions?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            The Raspberry Pi will reboot and start the{' '}
+            {runtimeStatus.target === 'electron' ? 'Electron' : 'browser'} version. You can switch
+            back from its System Menu.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRuntimeConfirmationOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={switchRuntime} autoFocus>
+            Switch &amp; reboot
           </Button>
         </DialogActions>
       </Dialog>

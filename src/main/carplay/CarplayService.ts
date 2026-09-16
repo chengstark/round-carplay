@@ -1,4 +1,3 @@
-import { app, ipcMain, WebContents } from 'electron'
 import { WebUSBDevice } from 'usb'
 import {
   Plugged,
@@ -19,8 +18,10 @@ import {
 } from './messages'
 import fs from 'fs'
 import path from 'path'
+import os from 'os'
 import usb from 'usb'
 import NodeMicrophone from './node/NodeMicrophone'
+import { NULL_EVENT_SINK, type ServiceEventSink } from '../events/ServiceEventSink'
 
 let dongleConnected = false
 
@@ -49,7 +50,6 @@ function readMediaFile(filePath: string): PersistedMediaFile {
 
 export class CarplayService {
   private driver = new DongleDriver()
-  private webContents: WebContents | null = null
   private config: DongleConfig = DEFAULT_CONFIG
   private pairTimeout: NodeJS.Timeout | null = null
   private frameInterval: NodeJS.Timeout | null = null
@@ -59,23 +59,24 @@ export class CarplayService {
   private shuttingDown = false
   private audioInfoSent = false
 
-  constructor() {
+  constructor(
+    private readonly events: ServiceEventSink = NULL_EVENT_SINK,
+    private readonly dataDirectory = path.join(os.homedir(), '.config', 'round-carplay')
+  ) {
     this.driver.on('message', (msg) => {
-      if (!this.webContents) return
-
       if (msg instanceof Plugged) {
         this.clearTimeouts()
-        this.webContents.send('carplay-event', { type: 'plugged' })
+        this.events.send('carplay-event', { type: 'plugged' })
 
         if (!this.started) {
           console.log('[CarplayService] Auto-starting CarPlay after Plugged event')
           this.start().catch(console.error)
         }
       } else if (msg instanceof Unplugged) {
-        this.webContents.send('carplay-event', { type: 'unplugged' })
+        this.events.send('carplay-event', { type: 'unplugged' })
         this.stop().catch(console.error)
       } else if (msg instanceof VideoData) {
-        this.webContents.send('carplay-event', {
+        this.events.send('carplay-event', {
           type: 'resolution',
           payload: { width: msg.width, height: msg.height }
         })
@@ -88,7 +89,7 @@ export class CarplayService {
           if (!this.audioInfoSent) {
             const meta = decodeTypeMap[msg.decodeType]
             if (meta) {
-              this.webContents.send('carplay-event', {
+              this.events.send('carplay-event', {
                 type: 'audioInfo',
                 payload: {
                   codec: meta.format ?? meta.mimeType,
@@ -128,8 +129,9 @@ export class CarplayService {
           }
         }
       } else if (msg instanceof MediaData) {
-        this.webContents!.send('carplay-event', { type: 'media', payload: msg })
-        const file = path.join(app.getPath('userData'), 'mediaData.json')
+        this.events.send('carplay-event', { type: 'media', payload: msg })
+        fs.mkdirSync(this.dataDirectory, { recursive: true })
+        const file = path.join(this.dataDirectory, 'mediaData.json')
         const existing = readMediaFile(file)
         const existingPayload = existing.payload
         const newPayload: PersistedMediaPayload = {
@@ -158,27 +160,13 @@ export class CarplayService {
         }
         fs.writeFileSync(file, JSON.stringify(out, null, 2), 'utf8')
       } else if (msg instanceof Command) {
-        this.webContents.send('carplay-event', { type: 'command', message: msg })
+        this.events.send('carplay-event', { type: 'command', message: msg })
       }
     })
 
     this.driver.on('failure', () => {
-      this.webContents?.send('carplay-event', { type: 'failure' })
+      this.events.send('carplay-event', { type: 'failure' })
     })
-
-    ipcMain.handle('carplay-start', async () => this.start())
-    ipcMain.handle('carplay-stop', async () => this.stop())
-    ipcMain.handle('carplay-sendframe', async () => this.driver.send(new SendCommand('frame')))
-    ipcMain.on('carplay-touch', (_, data) => {
-      this.driver.send(new SendTouch(data.x, data.y, data.action))
-    })
-    ipcMain.on('carplay-key-command', (_, command) => {
-      this.driver.send(new SendCommand(command))
-    })
-  }
-
-  public attachRenderer(webContents: WebContents) {
-    this.webContents = webContents
   }
 
   public markDongleConnected(connected: boolean) {
@@ -196,10 +184,10 @@ export class CarplayService {
     }
   }
 
-  private async start() {
+  public async start(): Promise<void> {
     if (this.started) return
     try {
-      const configPath = path.join(app.getPath('userData'), 'config.json')
+      const configPath = path.join(this.dataDirectory, 'config.json')
       const userConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'))
       this.config = { ...this.config, ...userConfig }
     } catch {
@@ -256,6 +244,22 @@ export class CarplayService {
     console.log('[CarplayService] CarPlay stopped')
   }
 
+  public sendFrame(): void {
+    this.driver.send(new SendCommand('frame'))
+  }
+
+  public sendTouch(x: number, y: number, action: number): void {
+    this.driver.send(new SendTouch(x, y, action))
+  }
+
+  public sendKeyCommand(command: string): void {
+    this.driver.send(new SendCommand(command as ConstructorParameters<typeof SendCommand>[0]))
+  }
+
+  public prepareForShutdown(): void {
+    this.shuttingDown = true
+  }
+
   private clearTimeouts() {
     if (this.pairTimeout) clearTimeout(this.pairTimeout)
     if (this.frameInterval) clearInterval(this.frameInterval)
@@ -267,7 +271,7 @@ export class CarplayService {
     chunkSize = 512 * 1024,
     extra: Record<string, any> = {}
   ) {
-    if (!this.webContents || !data) return
+    if (!data) return
     let offset = 0
     const total = data.byteLength
     const id = Math.random().toString(36).slice(2)
@@ -275,7 +279,7 @@ export class CarplayService {
     while (offset < total) {
       const end = Math.min(offset + chunkSize, total)
       const chunk = data.slice(offset, end)
-      this.webContents.send(channel, {
+      this.events.send(channel, {
         id,
         offset,
         total,

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+selected="$(sed -n '1p' /etc/round-carplay/runtime 2>/dev/null || true)"
+if test "$selected" != browser; then exit 0; fi
+
+/usr/local/sbin/round-carplay-runtime switch electron
+logger -t round-carplay "Browser runtime repeatedly failed; reverting to Electron"
+/usr/bin/systemctl reboot

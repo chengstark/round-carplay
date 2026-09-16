@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "protocolVersion": 1,
+  "artifacts": {
+    "electron": {
+      "version": "electron-release-version",
+      "url": "https://updates.example.com/round-carplay-arm64.AppImage",
+      "sha256": "replace-with-64-character-sha256"
+    },
+    "browserRuntime": {
+      "version": "browser-runtime-version",
+      "url": "https://updates.example.com/round-carplay-browser.tar.gz",
+      "sha256": "replace-with-64-character-sha256"
+    },
+    "browserUi": {
+      "version": "browser-ui-version",
+      "url": "https://updates.example.com/round-carplay-ui.tar.gz",
+      "sha256": "replace-with-64-character-sha256"
+    }
+  }
+}

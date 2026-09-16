@@ -1,8 +1,8 @@
 import type { Device } from 'usb'
-import { ipcMain, BrowserWindow } from 'electron'
 import { CarplayService } from '../carplay/CarplayService'
 import { findDongle } from './helpers'
 import NodeMicrophone from '../carplay/node/NodeMicrophone'
+import { NULL_EVENT_SINK, type ServiceEventSink } from '../events/ServiceEventSink'
 
 import * as usbModule from 'usb'
 const { usb, getDeviceList } = usbModule
@@ -20,8 +20,10 @@ export class USBService {
     console.log('[USBService] Monitoring stopped')
   }
 
-  constructor(private carplay: CarplayService) {
-    this.registerIpcHandlers()
+  constructor(
+    private carplay: CarplayService,
+    private readonly events: ServiceEventSink = NULL_EVENT_SINK
+  ) {
     this.listenToUsbEvents()
     usb.unrefHotplugEvents()
 
@@ -65,10 +67,8 @@ export class USBService {
       type: connected ? 'plugged' : 'unplugged',
       device: { vendorId, productId, deviceName: '' }
     }
-    BrowserWindow.getAllWindows().forEach((win) => {
-      win.webContents.send('usb-event', payload)
-      win.webContents.send('carplay-event', payload)
-    })
+    this.events.send('usb-event', payload)
+    this.events.send('carplay-event', payload)
   }
 
   private broadcastGenericUsbEvent(event: { type: 'attach' | 'detach'; device: Device }) {
@@ -78,61 +78,57 @@ export class USBService {
       type: event.type,
       device: { vendorId, productId, deviceName: '' }
     }
-    BrowserWindow.getAllWindows().forEach((win) => win.webContents.send('usb-event', payload))
+    this.events.send('usb-event', payload)
   }
 
-  private registerIpcHandlers() {
-    ipcMain.handle('usb-detect-dongle', async () => {
-      const devices = getDeviceList()
-      return devices.some(this.isDongle)
-    })
+  public detectDongle(): boolean {
+    return getDeviceList().some(this.isDongle)
+  }
 
-    ipcMain.handle('carplay:usbDevice', async () => {
-      const devices = getDeviceList()
-      const detectDev = devices.find(this.isDongle)
-      if (!detectDev) {
+  public async getDeviceInfo() {
+    const detectDev = getDeviceList().find(this.isDongle)
+    if (!detectDev) {
+      return {
+        device: false,
+        vendorId: null,
+        productId: null,
+        deviceName: '',
+        serialNumber: '',
+        manufacturerName: '',
+        productName: '',
+        fwVersion: 'Unknown'
+      }
+    }
+    return this.getDongleInfo(detectDev)
+  }
+
+  public getLastEvent() {
+    if (this.lastDongleState) {
+      const dev = getDeviceList().find(this.isDongle)
+      if (dev) {
         return {
-          device: false,
-          vendorId: null,
-          productId: null,
-          deviceName: '',
-          serialNumber: '',
-          manufacturerName: '',
-          productName: '',
-          fwVersion: 'Unknown'
-        }
-      }
-      return await this.getDongleInfo(detectDev)
-    })
-
-    ipcMain.handle('usb-force-reset', async () => {
-      if (process.platform === 'darwin') {
-        console.log('[USBService] macOS detected – using graceful reset')
-        return this.gracefulForceReset()
-      } else {
-        return this.forceReset()
-      }
-    })
-
-    ipcMain.handle('usb-last-event', async () => {
-      if (this.lastDongleState) {
-        const devices = getDeviceList()
-        const dev = devices.find(this.isDongle)
-        if (dev) {
-          return {
-            type: 'plugged',
-            device: {
-              vendorId: dev.deviceDescriptor.idVendor,
-              productId: dev.deviceDescriptor.idProduct,
-              deviceName: ''
-            }
+          type: 'plugged',
+          device: {
+            vendorId: dev.deviceDescriptor.idVendor,
+            productId: dev.deviceDescriptor.idProduct,
+            deviceName: ''
           }
         }
       }
-      return { type: 'unplugged', device: null }
-    })
+    }
+    return { type: 'unplugged', device: null }
+  }
 
-    ipcMain.handle('get-sysdefault-mic-label', () => NodeMicrophone.getSysdefaultPrettyName())
+  public getSysdefaultPrettyName(): string {
+    return NodeMicrophone.getSysdefaultPrettyName()
+  }
+
+  public forceReset(): Promise<boolean> {
+    if (process.platform === 'darwin') {
+      console.log('[USBService] macOS detected – using graceful reset')
+      return this.gracefulForceReset()
+    }
+    return this.forceResetLinux()
   }
 
   private async getDongleInfo(device: Device) {
@@ -195,10 +191,10 @@ export class USBService {
   }
 
   private notifyReset(type: 'usb-reset-start' | 'usb-reset-done', ok: boolean) {
-    BrowserWindow.getAllWindows().forEach((win) => win.webContents.send(type, ok))
+    this.events.send(type, ok)
   }
 
-  private async forceReset(): Promise<boolean> {
+  private async forceResetLinux(): Promise<boolean> {
     this.notifyReset('usb-reset-start', true)
     const dongle = findDongle()
     if (dongle) {

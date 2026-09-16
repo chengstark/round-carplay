@@ -1,20 +1,5 @@
 import { create } from 'zustand'
 import { ExtraConfig } from '../../../main/Globals'
-import { io } from 'socket.io-client'
-
-const URL = 'http://localhost:4000'
-
-// Socket.IO Setup
-const socket = io(URL, {
-  transports: ['websocket'],
-  reconnection: true,
-  reconnectionAttempts: 5,
-  reconnectionDelay: 2000,
-})
-
-socket.on('connect_error', (err) => {
-  console.warn('Socket.IO connect_error:', err.message)
-})
 
 // Carplay Store
 export interface CarplayStore {
@@ -65,13 +50,17 @@ export const useCarplayStore = create<CarplayStore>((set) => ({
   settings: null,
   saveSettings: (settings) => {
     set({ settings })
-    socket.emit('saveSettings', settings)
+    window.carplay.settings.save(settings).catch((error) => {
+      console.error('Could not save settings', error)
+    })
   },
   getSettings: () => {
-    socket.emit('getSettings')
+    window.carplay.settings.get().then((settings) => set({ settings })).catch((error) => {
+      console.error('Could not load settings', error)
+    })
   },
   stream: (stream) => {
-    socket.emit('stream', stream)
+    void stream
   },
 
   // Reset all stored info
@@ -151,20 +140,10 @@ export const useStatusStore = create<StatusStore>((set) => ({
   setLights: (lights) => set({ lights }),
 }))
 
-// Socket.IO Event-Handler
-socket.on('settings', (settings: ExtraConfig) => {
+window.carplay.settings.onUpdate((_event, settings: ExtraConfig) => {
   useCarplayStore.setState({ settings })
 })
 
-socket.on('reverse', (reverse: boolean) => {
-  useStatusStore.setState({ reverse })
-})
-socket.on('dongle-status', (connected: boolean) => {
-  useStatusStore.setState({ isDongleConnected: connected })
-})
-socket.on('stream-status', (streaming: boolean) => {
-  useStatusStore.setState({ isStreaming: streaming })
-})
-socket.on('camera-found', (found: boolean) => {
-  useStatusStore.setState({ cameraFound: found })
-})
+window.carplay.settings.get().then((settings) => {
+  useCarplayStore.setState({ settings })
+}).catch((error) => console.error('Could not load settings', error))

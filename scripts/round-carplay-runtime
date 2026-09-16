@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_DIR=/etc/round-carplay
+SELECTOR="$CONFIG_DIR/runtime"
+ELECTRON_UNIT=round-carplay-electron.service
+BACKEND_UNIT=round-carplay-backend.service
+BROWSER_UNIT=round-carplay-browser-kiosk.service
+INSTALL_HOME="$(sed -n '1p' "$CONFIG_DIR/install-user-home" 2>/dev/null || true)"
+test -n "$INSTALL_HOME" || INSTALL_HOME="$HOME"
+APPIMAGE="${ROUND_CARPLAY_APPIMAGE:-$INSTALL_HOME/round-carplay/round-carplay.AppImage}"
+RELEASE_ROOT="${ROUND_CARPLAY_RELEASE_ROOT:-$INSTALL_HOME/.local/share/round-carplay}"
+
+usage() {
+  echo "Usage: round-carplay-runtime {status|switch} {electron|browser}" >&2
+  exit 64
+}
+
+validate_target() {
+  case "$1" in
+    electron)
+      test -x "$APPIMAGE" || { echo "Electron AppImage is not installed" >&2; return 1; }
+      test -f "/etc/systemd/system/$ELECTRON_UNIT" || { echo "Electron service is not installed" >&2; return 1; }
+      ;;
+    browser)
+      test -f "$RELEASE_ROOT/current/server/backend.js" || { echo "Browser backend is not installed" >&2; return 1; }
+      test -f "$RELEASE_ROOT/current/ui/index.html" || { echo "Browser UI is not installed" >&2; return 1; }
+      test -f "/etc/systemd/system/$BACKEND_UNIT" || { echo "Browser backend service is not installed" >&2; return 1; }
+      test -f "/etc/systemd/system/$BROWSER_UNIT" || { echo "Browser kiosk service is not installed" >&2; return 1; }
+      ;;
+    *) usage ;;
+  esac
+}
+
+test "$#" -eq 2 || usage
+command_name="$1"
+target="$2"
+validate_target "$target"
+
+case "$command_name" in
+  status)
+    selected="$(sed -n '1p' "$SELECTOR" 2>/dev/null || true)"
+    if test "$selected" = "$target"; then
+      echo "$target version is installed and currently selected"
+    else
+      echo "$target version is installed and ready"
+    fi
+    ;;
+  switch)
+    test "$(id -u)" -eq 0 || { echo "Runtime selection requires root" >&2; exit 77; }
+    install -d -m 0755 "$CONFIG_DIR"
+    temporary="$SELECTOR.new.$$"
+    printf '%s\n' "$target" > "$temporary"
+    chmod 0644 "$temporary"
+    mv -f "$temporary" "$SELECTOR"
+    if test "$target" = electron; then
+      systemctl enable "$ELECTRON_UNIT"
+      systemctl disable "$BACKEND_UNIT" "$BROWSER_UNIT"
+    else
+      systemctl enable "$BACKEND_UNIT" "$BROWSER_UNIT"
+      systemctl disable "$ELECTRON_UNIT"
+    fi
+    systemctl daemon-reload
+    echo "$target version selected for the next boot"
+    ;;
+  *) usage ;;
+esac

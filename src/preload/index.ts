@@ -16,8 +16,8 @@ import type {
   WifiCameraDiagnostics,
   WifiCameraStartResult
 } from '../main/wifi/WifiCameraService'
-
-type ApiCallback<T = any> = (event: IpcRendererEvent, ...args: T[]) => void
+import type { RuntimeSwitchResult, RuntimeSwitchStatus } from '../main/runtime/RuntimeSwitchService'
+import type { ApiCallback, CarplayApi } from '../shared/carplayApiTypes'
 
 let usbEventQueue: [IpcRendererEvent, ...any[]][] = []
 let usbEventHandlers: ApiCallback<any>[] = []
@@ -56,7 +56,7 @@ ipcRenderer.on('carplay-audio-chunk', (_event, payload) => {
   }
 })
 
-export const api = {
+export const api: CarplayApi = {
   quit: () => ipcRenderer.invoke('quit'),
 
   onUSBResetStatus: (callback: ApiCallback<any>) => {
@@ -145,6 +145,12 @@ export const api = {
     }
   },
 
+  runtime: {
+    getStatus: (): Promise<RuntimeSwitchStatus> => ipcRenderer.invoke('runtime-get-status'),
+    switchTo: (target): Promise<RuntimeSwitchResult> =>
+      ipcRenderer.invoke('runtime-switch-to', target)
+  },
+
   ipc: {
     start: () => ipcRenderer.invoke('carplay-start'),
     stop: () => ipcRenderer.invoke('carplay-stop'),
@@ -167,7 +173,7 @@ export const api = {
   }
 }
 
-export type Api = typeof api
+export type Api = CarplayApi
 
 contextBridge.exposeInMainWorld('carplay', api)
 

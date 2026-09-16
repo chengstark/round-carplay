@@ -11,6 +11,9 @@ import { WifiCameraService } from './wifi/WifiCameraService'
 import { GpsService } from './gps/GpsService'
 import { NetworkService } from './network/NetworkService'
 import { SystemUpdateService } from './update/SystemUpdateService'
+import { OtaUpdateService } from './update/OtaUpdateService'
+import { RuntimeSwitchService } from './runtime/RuntimeSwitchService'
+import type { ServiceEventSink } from './events/ServiceEventSink'
 
 // Important: On Linux, enabling VA-API flags breaks WebCodecs’ hardware fallback path.
 // Requesting ‘prefer-hardware’ without a valid VA-API backend will immediately close the decoder.
@@ -90,11 +93,22 @@ let config: ExtraConfig
 let usbService: USBService
 let isQuitting = false
 
-const carplayService = new CarplayService()
-const wifiCameraService = new WifiCameraService()
-const gpsService = new GpsService()
+const appPath = app.getPath('userData')
+const configPath = join(appPath, 'config.json')
+const electronEvents: ServiceEventSink = {
+  send(channel, payload) {
+    const windows = BrowserWindow.getAllWindows().filter((window) => !window.isDestroyed())
+    windows.forEach((window) => window.webContents.send(channel, payload))
+    return windows.length > 0
+  }
+}
+const carplayService = new CarplayService(electronEvents, appPath)
+const wifiCameraService = new WifiCameraService(electronEvents)
+const gpsService = new GpsService(undefined, electronEvents)
 const networkService = new NetworkService()
 const systemUpdateService = new SystemUpdateService()
+const otaUpdateService = new OtaUpdateService(() => wifiCameraService.isActive())
+const runtimeSwitchService = new RuntimeSwitchService()
 ;(global as any).carplayService = carplayService
 
 app.on('before-quit', async (e) => {
@@ -102,11 +116,11 @@ app.on('before-quit', async (e) => {
   isQuitting = true
   e.preventDefault()
   try {
-    carplayService['shuttingDown'] = true
+    carplayService.prepareForShutdown()
     wifiCameraService.stop()
     gpsService.stop()
     await carplayService.stop()
-    await usbService['forceReset']?.()
+    await usbService?.forceReset()
     await usbService.stop()
   } catch (err) {
     console.warn('Error while quitting:', err)
@@ -128,9 +142,6 @@ protocol.registerSchemesAsPrivileged([
     }
   }
 ])
-
-const appPath = app.getPath('userData')
-const configPath = join(appPath, 'config.json')
 
 const DEFAULT_BINDINGS: KeyBindings = {
   up: 'ArrowUp',
@@ -253,9 +264,7 @@ function createWindow(): void {
     }
 
     if (is.dev) mainWindow.webContents.openDevTools({ mode: 'detach' })
-    carplayService.attachRenderer(mainWindow.webContents)
-    wifiCameraService.attachRenderer(mainWindow.webContents)
-    gpsService.attachRenderer(mainWindow.webContents)
+    electronEvents.send('gps-state', gpsService.getState())
   })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -330,10 +339,26 @@ app.whenReady().then(() => {
     }
   })
 
-  usbService = new USBService(carplayService)
+  usbService = new USBService(carplayService, electronEvents)
   socket = new Socket(config, saveSettings)
 
   ipcMain.handle('quit', () => (process.platform === 'darwin' ? mainWindow?.hide() : app.quit()))
+  ipcMain.handle('carplay-start', () => carplayService.start())
+  ipcMain.handle('carplay-stop', () => carplayService.stop())
+  ipcMain.handle('carplay-sendframe', () => carplayService.sendFrame())
+  ipcMain.on('carplay-touch', (_event, data) => {
+    carplayService.sendTouch(data.x, data.y, data.action)
+  })
+  ipcMain.on('carplay-key-command', (_event, command) => {
+    carplayService.sendKeyCommand(command)
+  })
+  ipcMain.handle('usb-force-reset', () => usbService.forceReset())
+  ipcMain.handle('usb-detect-dongle', () => usbService.detectDongle())
+  ipcMain.handle('carplay:usbDevice', () => usbService.getDeviceInfo())
+  ipcMain.handle('usb-last-event', () => usbService.getLastEvent())
+  ipcMain.handle('get-sysdefault-mic-label', () => usbService.getSysdefaultPrettyName())
+  ipcMain.handle('getSettings', () => config)
+  ipcMain.handle('save-settings', (_event, settings: ExtraConfig) => saveSettings(settings))
   ipcMain.handle('wifi-camera-start', (_event, options) => {
     void networkService.connectCameraWifi().then(result => {
       if (!result.ok) console.warn(`[WifiCamera] Camera Wi-Fi connection failed: ${result.message}`)
@@ -349,14 +374,32 @@ app.whenReady().then(() => {
     networkService.connectWifi(ssid, password)
   )
   ipcMain.handle('network-get-ip-addresses', () => networkService.getIpAddresses())
-  ipcMain.handle('system-update-get-status', () => systemUpdateService.getStatus())
+  ipcMain.handle('system-update-get-status', () =>
+    otaUpdateService.isConfigured() ? otaUpdateService.getStatus() : systemUpdateService.getStatus()
+  )
   ipcMain.handle('system-update-start', event =>
-    systemUpdateService.update(status => {
-      if (!event.sender.isDestroyed()) event.sender.send('system-update-status', status)
-    })
+    (otaUpdateService.isConfigured() ? otaUpdateService : systemUpdateService).update(status => {
+        if (!event.sender.isDestroyed()) event.sender.send('system-update-status', status)
+      })
   )
   ipcMain.handle('system-update-reboot', () => systemUpdateService.reboot())
   ipcMain.handle('system-power-off', () => systemUpdateService.powerOff())
+  ipcMain.handle('runtime-get-status', () => runtimeSwitchService.getStatus('electron'))
+  ipcMain.handle('runtime-switch-to', async (_event, target) => {
+    if (target !== 'browser') return { ok: false, message: 'Invalid runtime switch target' }
+    const switchResult = await runtimeSwitchService.switchTo('electron', target)
+    if (!switchResult.ok) return switchResult
+
+    const rebootResult = await systemUpdateService.reboot()
+    if (rebootResult.ok) {
+      return { ok: true, message: 'Switching to the browser version…' }
+    }
+
+    return {
+      ok: false,
+      message: `${switchResult.message}, but the reboot failed: ${rebootResult.message}`
+    }
+  })
 
   createWindow()
   gpsService.start().catch((error) => console.error('[GPS] Startup failed', error))
@@ -400,11 +443,13 @@ function saveSettings(settings: ExtraConfig) {
   )
 
   const gpsSmoothing = normalizeGpsSmoothing(settings.gpsSmoothing)
+  config = { ...settings, gpsSmoothing }
   gpsService.setSmoothing(gpsSmoothing)
   socket.config = { ...settings, gpsSmoothing }
   socket.sendSettings()
+  electronEvents.send('settings', config)
 
-  if (!mainWindow) return
+  if (!mainWindow) return config
 
   if (settings.kiosk) {
     mainWindow.setKiosk(true)
@@ -414,6 +459,7 @@ function saveSettings(settings: ExtraConfig) {
     mainWindow.setContentSize(settings.width, settings.height, false)
     applyAspectRatio(mainWindow, settings.width, settings.height)
   }
+  return config
 }
 
 function normalizeWifiCameraRotation(value: unknown): number {

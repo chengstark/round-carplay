@@ -1,8 +1,8 @@
-import { WebContents } from 'electron'
 import { execFile } from 'node:child_process'
 import http, { ClientRequest, IncomingMessage } from 'node:http'
 import { promisify } from 'node:util'
 import type { WifiCameraFrameSize, WifiCameraOptions } from '../Globals'
+import { NULL_EVENT_SINK, type ServiceEventSink } from '../events/ServiceEventSink'
 
 const execFileAsync = promisify(execFile)
 
@@ -61,7 +61,6 @@ type WifiLinkMetrics = Pick<
  * stream reconnects automatically while the camera surface remains open.
  */
 export class WifiCameraService {
-  private renderer: WebContents | null = null
   private streamRequest: ClientRequest | null = null
   private streamResponse: IncomingMessage | null = null
   private streamBuffer = Buffer.alloc(0)
@@ -90,8 +89,10 @@ export class WifiCameraService {
   private connectionStartedAt = 0
   private wifiMetrics: WifiLinkMetrics = {}
 
-  attachRenderer(renderer: WebContents): void {
-    this.renderer = renderer
+  constructor(private readonly events: ServiceEventSink = NULL_EVENT_SINK) {}
+
+  isActive(): boolean {
+    return this.running
   }
 
   start(options: WifiCameraOptions): Promise<WifiCameraStartResult> {
@@ -345,15 +346,12 @@ export class WifiCameraService {
   }
 
   private deliverFrame(frame: Buffer): void {
-    if (!this.renderer || this.renderer.isDestroyed()) return
-    this.rendererBusy = true
-    this.renderer.send('wifi-camera-frame', frame)
+    this.rendererBusy = this.events.send('wifi-camera-frame', frame)
   }
 
   private sendStatus(state: CameraState, message: string): void {
     this.state = state
-    if (!this.renderer || this.renderer.isDestroyed()) return
-    this.renderer.send('wifi-camera-status', { state, message })
+    this.events.send('wifi-camera-status', { state, message })
   }
 
   private resetDiagnostics(): void {
@@ -415,7 +413,6 @@ export class WifiCameraService {
   }
 
   private sendDiagnostics(): void {
-    if (!this.renderer || this.renderer.isDestroyed()) return
     const diagnostics: WifiCameraDiagnostics = {
       state: this.state,
       fps: this.currentFps,
@@ -427,7 +424,7 @@ export class WifiCameraService {
       reconnectCount: this.reconnectCount,
       ...this.wifiMetrics
     }
-    this.renderer.send('wifi-camera-diagnostics', diagnostics)
+    this.events.send('wifi-camera-diagnostics', diagnostics)
   }
 }
 

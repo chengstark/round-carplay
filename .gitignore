@@ -6,6 +6,7 @@ bower_components/
 dist/
 out/
 build/
+.worktrees/
 *.AppImage
 *.tgz
 *.apk

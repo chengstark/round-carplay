@@ -20,6 +20,7 @@ export default defineConfig({
       rollupOptions: {
         input: {
           main: resolve(__dirname, 'src/main/index.ts'),
+          backend: resolve(__dirname, 'src/backend/index.ts'),
           usbWorker: resolve(__dirname, 'src/main/usb/USBWorker.ts')
         },
         output: {
@@ -41,7 +42,7 @@ export default defineConfig({
     }
   },
   renderer: {
-    base: 'app://',
+    base: './',
     publicDir: resolve(__dirname, 'src/renderer/public'),
     build: {
       outDir: 'out/renderer',
