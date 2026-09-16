@@ -60,12 +60,28 @@ ROUND_CARPLAY_RELEASE_ROOT="$RELEASE_ROOT" npm run install:browser-release
 
 sudo install -d -m 0755 "$CONFIG_DIR"
 printf '%s\n' "$USER_HOME" | sudo tee "$CONFIG_DIR/install-user-home" >/dev/null
+CAMERA_PASSWORD_FILE="$CONFIG_DIR/camera-wifi-password"
+if ! sudo test -s "$CAMERA_PASSWORD_FILE"; then
+  camera_password="${ROUND_CARPLAY_CAMERA_WIFI_PASSWORD:-}"
+  if test -z "$camera_password" && test -t 0; then
+    read -r -s -p "XIAO camera Wi-Fi password: " camera_password
+    echo
+  fi
+  if test -z "$camera_password"; then
+    echo "Set ROUND_CARPLAY_CAMERA_WIFI_PASSWORD or run interactively to configure the camera." >&2
+    exit 1
+  fi
+  printf '%s\n' "$camera_password" | sudo tee "$CAMERA_PASSWORD_FILE" >/dev/null
+  unset camera_password
+fi
+sudo chmod 0600 "$CAMERA_PASSWORD_FILE"
 if test -n "${ROUND_CARPLAY_UPDATE_MANIFEST_URL:-}"; then
   printf '%s\n' "$ROUND_CARPLAY_UPDATE_MANIFEST_URL" | sudo tee "$CONFIG_DIR/update-manifest-url" >/dev/null
   sudo chmod 0644 "$CONFIG_DIR/update-manifest-url"
 fi
 sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-runtime" /usr/local/sbin/round-carplay-runtime
 sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-browser-fallback" /usr/local/sbin/round-carplay-browser-fallback
+sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-camera-wifi" /usr/local/sbin/round-carplay-camera-wifi
 
 CURSOR_THEME_NAME=round-carplay-transparent
 CURSOR_THEME_ROOT="/usr/local/share/icons/$CURSOR_THEME_NAME"
@@ -229,6 +245,7 @@ EOF
 sudo tee /etc/sudoers.d/round-carplay-runtime >/dev/null <<EOF
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-runtime switch electron
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-runtime switch browser
+$INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-camera-wifi
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/systemctl reboot
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff
 EOF

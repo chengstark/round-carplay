@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+test "$(id -u)" -eq 0 || {
+  echo "Camera Wi-Fi activation requires root" >&2
+  exit 77
+}
+
+PROFILE=xiao-camera
+INTERFACE=wlan0
+SSID=XIAO_ESP32S3_Sense
+PASSWORD_FILE=/etc/round-carplay/camera-wifi-password
+
+test -s "$PASSWORD_FILE" || {
+  echo "Camera Wi-Fi password is not installed" >&2
+  exit 78
+}
+IFS= read -r PASSWORD < "$PASSWORD_FILE"
+test -n "$PASSWORD" || {
+  echo "Camera Wi-Fi password is empty" >&2
+  exit 78
+}
+
+if ! nmcli connection show "$PROFILE" >/dev/null 2>&1; then
+  nmcli connection add \
+    type wifi \
+    ifname "$INTERFACE" \
+    con-name "$PROFILE" \
+    ssid "$SSID"
+fi
+
+nmcli connection modify "$PROFILE" \
+  802-11-wireless.ssid "$SSID" \
+  802-11-wireless.band bg \
+  802-11-wireless.channel 6 \
+  802-11-wireless.powersave 2 \
+  802-11-wireless-security.key-mgmt wpa-psk \
+  802-11-wireless-security.psk-flags 0 \
+  802-11-wireless-security.psk "$PASSWORD" \
+  connection.autoconnect yes \
+  connection.autoconnect-priority 500 \
+  connection.autoconnect-retries 0 \
+  ipv4.method auto \
+  ipv6.method disabled
+
+nmcli --wait 30 connection up "$PROFILE" ifname "$INTERFACE"
+unset PASSWORD

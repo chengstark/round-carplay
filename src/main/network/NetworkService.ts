@@ -1,12 +1,11 @@
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { networkInterfaces } from 'node:os'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 const CAMERA_WIFI_SSID = 'XIAO_ESP32S3_Sense'
-const CAMERA_WIFI_PASSWORD = 'seeedstudio'
-const CAMERA_WIFI_INTERFACE = 'wlan0'
-const CAMERA_WIFI_PROFILE = 'xiao-camera'
+const CAMERA_WIFI_HELPER = '/usr/local/sbin/round-carplay-camera-wifi'
 
 export type WifiNetwork = {
   ssid: string
@@ -57,17 +56,15 @@ export class NetworkService {
     }
 
     try {
-      const uuid = await ensureCameraWifiProfile()
-      await runNmcli([
-        '--wait',
-        '30',
-        'connection',
-        'up',
-        'uuid',
-        uuid,
-        'ifname',
-        CAMERA_WIFI_INTERFACE
-      ])
+      if (!existsSync(CAMERA_WIFI_HELPER)) {
+        throw new Error('Camera Wi-Fi helper is not installed; rerun the kiosk installer')
+      }
+      await execFileAsync('sudo', ['-n', CAMERA_WIFI_HELPER], {
+        encoding: 'utf8',
+        timeout: 35_000,
+        maxBuffer: 512 * 1024,
+        env: { ...process.env, LC_ALL: 'C' }
+      })
       return {
         ok: true,
         message: `Connected to ${CAMERA_WIFI_SSID}`,
@@ -182,80 +179,6 @@ export class NetworkService {
   }
 }
 
-async function ensureCameraWifiProfile(): Promise<string> {
-  let uuids = await findConnectionUuids(CAMERA_WIFI_PROFILE)
-  if (uuids.length === 0) {
-    await runNmcli([
-      'connection',
-      'add',
-      'type',
-      'wifi',
-      'ifname',
-      CAMERA_WIFI_INTERFACE,
-      'con-name',
-      CAMERA_WIFI_PROFILE,
-      'ssid',
-      CAMERA_WIFI_SSID
-    ])
-    uuids = await findConnectionUuids(CAMERA_WIFI_PROFILE)
-  }
-  if (uuids.length === 0) throw new Error('Camera Wi-Fi profile could not be created')
-
-  for (const uuid of uuids) await configureCameraWifiProfile(uuid)
-  const activeUuids = await findConnectionUuids(CAMERA_WIFI_PROFILE, true)
-  return activeUuids.find(uuid => uuids.includes(uuid)) ?? uuids[0]
-}
-
-async function configureCameraWifiProfile(uuid: string): Promise<void> {
-  await runNmcli([
-    'connection',
-    'modify',
-    'uuid',
-    uuid,
-    '802-11-wireless.ssid',
-    CAMERA_WIFI_SSID,
-    '802-11-wireless.powersave',
-    '2',
-    '802-11-wireless-security.key-mgmt',
-    'wpa-psk',
-    '802-11-wireless-security.psk-flags',
-    '0',
-    '802-11-wireless-security.psk',
-    CAMERA_WIFI_PASSWORD,
-    'connection.autoconnect',
-    'yes',
-    'connection.autoconnect-priority',
-    '500',
-    'connection.autoconnect-retries',
-    '0',
-    'ipv4.method',
-    'auto',
-    'ipv6.method',
-    'disabled'
-  ])
-}
-
-async function findConnectionUuids(name: string, activeOnly = false): Promise<string[]> {
-  const args = [
-    '--terse',
-    '--escape',
-    'yes',
-    '--fields',
-    'UUID,NAME',
-    'connection',
-    'show'
-  ]
-  if (activeOnly) args.push('--active')
-  const { stdout } = await runNmcli(args)
-  const matches: string[] = []
-  for (const line of stdout.split(/\r?\n/)) {
-    if (!line) continue
-    const [uuid, connectionName] = splitNmcliLine(line)
-    if (connectionName === name && uuid) matches.push(uuid)
-  }
-  return matches
-}
-
 async function persistActiveWifiProfile(ssid: string, password: string): Promise<void> {
   const { stdout } = await runNmcli([
     '--terse',
@@ -269,7 +192,7 @@ async function persistActiveWifiProfile(ssid: string, password: string): Promise
   ])
   const activeWifiUuids = stdout
     .split(/\r?\n/)
-    .map(line => line.split(':'))
+    .map((line) => line.split(':'))
     .filter(([, type]) => type === '802-11-wireless' || type === 'wifi')
     .map(([uuid]) => uuid)
     .filter(Boolean)
@@ -303,12 +226,7 @@ async function persistActiveWifiProfile(ssid: string, password: string): Promise
     '0'
   ]
   if (password) {
-    args.push(
-      '802-11-wireless-security.psk-flags',
-      '0',
-      '802-11-wireless-security.psk',
-      password
-    )
+    args.push('802-11-wireless-security.psk-flags', '0', '802-11-wireless-security.psk', password)
   }
   await runNmcli(args)
 }

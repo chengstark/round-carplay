@@ -58,7 +58,7 @@ kiosk startup to reduce latency spikes and dropouts. Wi-Fi networks selected
 through the on-display system menu are saved as preferred, persistent
 NetworkManager profiles with unlimited automatic reconnect attempts.
 Opening the integrated camera automatically connects the Pi to the firmware's
-default `XIAO_ESP32S3_Sense` hotspot using its bundled `seeedstudio` password,
+default `XIAO_ESP32S3_Sense` hotspot using the password stored by the installer,
 so the kiosk does not require keyboard input. The camera connection profile
 explicitly disables Wi-Fi power saving each time it is repaired and activated.
 
