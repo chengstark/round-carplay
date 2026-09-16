@@ -54,6 +54,7 @@ export class CarplayService {
   private pairTimeout: NodeJS.Timeout | null = null
   private frameInterval: NodeJS.Timeout | null = null
   private _mic: NodeMicrophone | null = null
+  private startPromise: Promise<void> | null = null
   private started = false
   private stopping = false
   private shuttingDown = false
@@ -65,6 +66,7 @@ export class CarplayService {
   ) {
     this.driver.on('message', (msg) => {
       if (msg instanceof Plugged) {
+        console.log('[CarplayService] Phone connected through AutoKit')
         this.clearTimeouts()
         this.events.send('carplay-event', { type: 'plugged' })
 
@@ -73,6 +75,7 @@ export class CarplayService {
           this.start().catch(console.error)
         }
       } else if (msg instanceof Unplugged) {
+        console.log('[CarplayService] Phone disconnected from AutoKit')
         this.events.send('carplay-event', { type: 'unplugged' })
         this.stop().catch(console.error)
       } else if (msg instanceof VideoData) {
@@ -186,6 +189,15 @@ export class CarplayService {
 
   public async start(): Promise<void> {
     if (this.started) return
+    if (this.startPromise) return this.startPromise
+
+    this.startPromise = this.startInternal().finally(() => {
+      this.startPromise = null
+    })
+    return this.startPromise
+  }
+
+  private async startInternal(): Promise<void> {
     try {
       const configPath = path.join(this.dataDirectory, 'config.json')
       const userConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'))
@@ -225,7 +237,9 @@ export class CarplayService {
   }
 
   public async stop(): Promise<void> {
-    if (!this.started || this.stopping) return
+    if (this.stopping) return
+    if (this.startPromise) await this.startPromise
+    if (!this.started) return
     this.stopping = true
     this.clearTimeouts()
     try {

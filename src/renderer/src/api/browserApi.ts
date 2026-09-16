@@ -22,18 +22,22 @@ function installBrowserApi(): void {
   let audioHandler: Listener | null = null
   const videoQueue: unknown[] = []
   const audioQueue: unknown[] = []
+  const assembleVideo = createChunkAssembler(20 * 1024 * 1024)
+  const assembleAudio = createChunkAssembler(2 * 1024 * 1024)
 
   socket.on('usb-event', (payload) => {
     if (usbHandlers.size) usbHandlers.forEach((handler) => handler(undefined, payload))
     else pushBounded(usbQueue, payload, 32)
   })
   socket.on('carplay-video-chunk', (payload) => {
-    const normalized = normalizeChunk(payload)
+    const normalized = assembleVideo(payload)
+    if (!normalized) return
     if (videoHandler) videoHandler(normalized)
     else pushBounded(videoQueue, normalized, 64)
   })
   socket.on('carplay-audio-chunk', (payload) => {
-    const normalized = normalizeChunk(payload)
+    const normalized = assembleAudio(payload)
+    if (!normalized) return
     if (audioHandler) audioHandler(normalized)
     else pushBounded(audioQueue, normalized, 128)
   })
@@ -139,12 +143,6 @@ function addListener(socket: Socket, event: string, listener: Listener): () => v
   return () => socket.off(event, listener)
 }
 
-function normalizeChunk(payload: any): any {
-  if (!payload || payload.chunk == null) return payload
-  const chunk = toUint8Array(payload.chunk)
-  return { ...payload, chunk: new Uint8Array(chunk) }
-}
-
 function toUint8Array(value: unknown): Uint8Array {
   if (value instanceof Uint8Array) return value
   if (value instanceof ArrayBuffer) return new Uint8Array(value)
@@ -152,6 +150,62 @@ function toUint8Array(value: unknown): Uint8Array {
     return Uint8Array.from((value as any).data)
   }
   return new Uint8Array()
+}
+
+function createChunkAssembler(maximumBytes: number): (payload: any) => any | null {
+  type Assembly = { buffer: Uint8Array; received: number; total: number }
+  const pending = new Map<string, Assembly>()
+
+  return (payload: any): any | null => {
+    if (!payload || payload.chunk == null) return payload
+
+    const chunk = toUint8Array(payload.chunk)
+    const id = typeof payload.id === 'string' ? payload.id : ''
+    const offset = Number(payload.offset)
+    const total = Number(payload.total)
+
+    if (
+      !id ||
+      !Number.isSafeInteger(offset) ||
+      !Number.isSafeInteger(total) ||
+      offset < 0 ||
+      total <= 0 ||
+      total > maximumBytes ||
+      offset + chunk.byteLength > total
+    ) {
+      return { ...payload, chunk: new Uint8Array(chunk) }
+    }
+
+    if (offset === 0 && chunk.byteLength === total) {
+      return { ...payload, chunk: new Uint8Array(chunk) }
+    }
+
+    let assembly = pending.get(id)
+    if (offset === 0) {
+      assembly = { buffer: new Uint8Array(total), received: 0, total }
+      pending.set(id, assembly)
+      while (pending.size > 4) pending.delete(pending.keys().next().value as string)
+    }
+
+    // WebSocket delivery is ordered. A missing volatile chunk makes the frame
+    // unusable, so discard it rather than sending corrupt H.264/PCM downstream.
+    if (!assembly || assembly.total !== total || offset !== assembly.received) {
+      pending.delete(id)
+      return null
+    }
+
+    assembly.buffer.set(chunk, offset)
+    assembly.received += chunk.byteLength
+    if (assembly.received !== total) return null
+
+    pending.delete(id)
+    return {
+      ...payload,
+      offset: 0,
+      isLast: true,
+      chunk: assembly.buffer
+    }
+  }
 }
 
 function pushBounded(queue: unknown[], value: unknown, maximum: number): void {

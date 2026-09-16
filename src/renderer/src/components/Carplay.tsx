@@ -145,9 +145,12 @@ const Carplay: React.FC<CarplayProps> = ({
 
   // Preload-Chunks fwd to Worker-Port
   useEffect(() => {
-    const handleVideo = (packet: any) => {
-      if (!renderReady) return
+    // Keep the preload/browser adapter queue intact until the decoder worker is
+    // ready. Registering a handler earlier drained and discarded the opening
+    // SPS/keyframe, leaving the CarPlay surface black.
+    if (!renderReady) return
 
+    const handleVideo = (packet: any) => {
       const { chunk } = packet
       const transfer = chunk.buffer
 
@@ -155,6 +158,9 @@ const Carplay: React.FC<CarplayProps> = ({
     }
 
     window.carplay.ipc.onVideoChunk(handleVideo)
+    window.carplay.ipc.sendFrame().catch((error) => {
+      console.warn('[CARPLAY] Initial frame request failed', error)
+    })
 
     return () => {}
   }, [videoChannel, renderReady])
@@ -367,7 +373,11 @@ const Carplay: React.FC<CarplayProps> = ({
   // Resize Observer
   useEffect(() => {
     if (!carplayWorker || !mainElem.current) return
-    const obs = new ResizeObserver(() => carplayWorker.postMessage({ type: 'frame' }))
+    const obs = new ResizeObserver(() => {
+      window.carplay.ipc.sendFrame().catch((error) => {
+        console.warn('[CARPLAY] Resize frame request failed', error)
+      })
+    })
     obs.observe(mainElem.current)
     return () => obs.disconnect()
   }, [carplayWorker])

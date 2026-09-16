@@ -119,7 +119,6 @@ export class RendererWorker {
 
     const platform = navigator.platform.toLowerCase()
     const isMac = platform.startsWith('mac')
-    const isLinux = platform.includes('linux')
 
     const rendererPriority = isMac ? ['webgpu', 'webgl2', 'webgl'] : ['webgl2', 'webgl', 'webgpu']
 
@@ -132,8 +131,9 @@ export class RendererWorker {
       )
     }
 
-    // Linux: sw -> hw & Darwin: hw -> sw
-    const selectOrder: ('hw' | 'sw')[] = isLinux ? ['sw', 'hw'] : ['hw', 'sw']
+    // The Pi must prefer hardware decode. Software H.264 decoding can saturate
+    // the CPU, starve the USB/WebSocket path and make AutoKit disconnect.
+    const selectOrder: ('hw' | 'sw')[] = this.useHardware ? ['hw', 'sw'] : ['sw', 'hw']
 
     for (const mode of selectOrder) {
       for (const r of rendererPriority) {
@@ -211,7 +211,7 @@ export class RendererWorker {
     const cfg: VideoDecoderConfig = {
       ...structuredClone(config),
       hardwareAcceleration: accel,
-      optimizeForLatency: false
+      optimizeForLatency: true
     }
 
     try {
