@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 const CAMERA_WIFI_SSID = 'XIAO_ESP32S3_Sense'
 const CAMERA_WIFI_HELPER = '/usr/local/sbin/round-carplay-camera-wifi'
+const WIFI_CONNECT_HELPER = '/usr/local/sbin/round-carplay-connect-wifi'
 
 export type WifiNetwork = {
   ssid: string
@@ -132,22 +133,14 @@ export class NetworkService {
       return { ok: false, message: 'Select a Wi-Fi network', ipAddresses: this.getIpAddresses() }
     }
 
-    const args = ['--wait', '30', 'device', 'wifi', 'connect', cleanSsid]
-    if (password) args.push('password', password)
-
     try {
-      await runNmcli(args)
-      let profileSaved = true
-      try {
-        await persistActiveWifiProfile(cleanSsid, password)
-      } catch {
-        profileSaved = false
+      if (!existsSync(WIFI_CONNECT_HELPER)) {
+        throw new Error('Wi-Fi connection helper is not installed; rerun the kiosk installer')
       }
+      await runWifiConnectHelper(cleanSsid, password)
       return {
         ok: true,
-        message: profileSaved
-          ? `Connected to ${cleanSsid}; password saved for automatic reconnect`
-          : `Connected to ${cleanSsid}, but NetworkManager could not save automatic reconnect`,
+        message: `Connected to ${cleanSsid}; password saved for automatic reconnect`,
         ipAddresses: this.getIpAddresses()
       }
     } catch (error) {
@@ -179,56 +172,40 @@ export class NetworkService {
   }
 }
 
-async function persistActiveWifiProfile(ssid: string, password: string): Promise<void> {
-  const { stdout } = await runNmcli([
-    '--terse',
-    '--escape',
-    'no',
-    '--fields',
-    'UUID,TYPE',
-    'connection',
-    'show',
-    '--active'
-  ])
-  const activeWifiUuids = stdout
-    .split(/\r?\n/)
-    .map((line) => line.split(':'))
-    .filter(([, type]) => type === '802-11-wireless' || type === 'wifi')
-    .map(([uuid]) => uuid)
-    .filter(Boolean)
-  let uuid: string | undefined
-  for (const candidate of activeWifiUuids) {
-    const profile = await runNmcli([
-      '--get-values',
-      '802-11-wireless.ssid',
-      'connection',
-      'show',
-      'uuid',
-      candidate
-    ])
-    if (profile.stdout.trim() === ssid) {
-      uuid = candidate
-      break
-    }
-  }
-  if (!uuid) throw new Error('No active Wi-Fi profile was found')
+function runWifiConnectHelper(ssid: string, password: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      'sudo',
+      ['-n', WIFI_CONNECT_HELPER],
+      {
+        encoding: 'utf8',
+        timeout: 35_000,
+        maxBuffer: 512 * 1024,
+        env: { ...process.env, LC_ALL: 'C' }
+      },
+      (error, _stdout, stderr) => {
+        if (!error) {
+          resolve()
+          return
+        }
+        const commandError = error as typeof error & { stderr?: string }
+        commandError.stderr = stderr
+        reject(commandError)
+      }
+    )
 
-  const args = [
-    'connection',
-    'modify',
-    'uuid',
-    uuid,
-    'connection.autoconnect',
-    'yes',
-    'connection.autoconnect-priority',
-    '100',
-    'connection.autoconnect-retries',
-    '0'
-  ]
-  if (password) {
-    args.push('802-11-wireless-security.psk-flags', '0', '802-11-wireless-security.psk', password)
-  }
-  await runNmcli(args)
+    child.stdin?.on('error', () => {
+      // The callback reports helper startup and early-exit errors.
+    })
+    child.stdin?.end(
+      Buffer.concat([
+        Buffer.from(ssid, 'utf8'),
+        Buffer.from([0]),
+        Buffer.from(password, 'utf8'),
+        Buffer.from([0])
+      ])
+    )
+  })
 }
 
 export function parseWifiList(output: string): WifiNetwork[] {

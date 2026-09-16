@@ -152,7 +152,7 @@ export default function SystemMenu({
       setMessage(result.message)
       if (result.ok) {
         setPassword('')
-        await refreshNetworks()
+        void refreshNetworks()
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error))

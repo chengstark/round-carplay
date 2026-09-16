@@ -82,7 +82,8 @@ function installBrowserApi(): void {
     },
     network: {
       scanWifi: () => rpc(socket, 'network.scanWifi'),
-      connectWifi: (ssid, password) => rpc(socket, 'network.connectWifi', ssid, password),
+      connectWifi: (ssid, password) =>
+        rpcWithTimeout(socket, 45_000, 'network.connectWifi', ssid, password),
       getIpAddresses: () => rpc(socket, 'network.getIpAddresses')
     },
     update: {

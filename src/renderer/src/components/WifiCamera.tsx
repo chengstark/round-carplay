@@ -298,18 +298,18 @@ export default function WifiCamera({
             whiteSpace: 'nowrap'
           }}
         >
-          {diagnostics.signalDbm != null && (
-            <span style={{ color: signalColor(diagnostics.signalDbm) }}>
-              SIG {diagnostics.signalDbm.toFixed(0)} dBm
-            </span>
-          )}
-          {diagnostics.signalDbm != null && diagnostics.noiseDbm != null && <span>·</span>}
-          {diagnostics.noiseDbm != null && (
-            <span>NOISE {diagnostics.noiseDbm.toFixed(0)} dBm</span>
-          )}
-          {diagnostics.signalDbm == null && diagnostics.noiseDbm == null && (
-            <span style={{ opacity: 0.72 }}>Wi-Fi levels unavailable</span>
-          )}
+          <span
+            style={{
+              color: diagnostics.signalDbm == null ? 'inherit' : signalColor(diagnostics.signalDbm),
+              opacity: diagnostics.signalDbm == null ? 0.72 : 1
+            }}
+          >
+            SIG {diagnostics.signalDbm == null ? 'N/A' : `${diagnostics.signalDbm.toFixed(0)} dBm`}
+          </span>
+          <span>·</span>
+          <span style={{ opacity: diagnostics.noiseDbm == null ? 0.72 : 1 }}>
+            NOISE {diagnostics.noiseDbm == null ? 'N/A' : `${diagnostics.noiseDbm.toFixed(0)} dBm`}
+          </span>
         </div>
         <div
           style={{

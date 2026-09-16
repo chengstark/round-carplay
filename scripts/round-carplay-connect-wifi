@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+test "$(id -u)" -eq 0 || {
+  echo "Wi-Fi connection requires root" >&2
+  exit 77
+}
+
+INTERFACE=wlan0
+
+IFS= read -r -d '' SSID || {
+  echo "Wi-Fi network name was not provided" >&2
+  exit 78
+}
+IFS= read -r -d '' PASSWORD || {
+  echo "Wi-Fi password was not provided" >&2
+  exit 78
+}
+
+SSID_BYTES="$(LC_ALL=C printf '%s' "$SSID" | wc -c | tr -d ' ')"
+PASSWORD_BYTES="$(LC_ALL=C printf '%s' "$PASSWORD" | wc -c | tr -d ' ')"
+test "$SSID_BYTES" -ge 1 && test "$SSID_BYTES" -le 32 || {
+  echo "Wi-Fi network name must contain 1 to 32 bytes" >&2
+  exit 78
+}
+test "$PASSWORD_BYTES" -le 128 || {
+  echo "Wi-Fi password is too long" >&2
+  exit 78
+}
+
+if test -n "$PASSWORD"; then
+  printf '%s\n' "$PASSWORD" | nmcli --ask --wait 30 device wifi connect "$SSID" ifname "$INTERFACE"
+else
+  nmcli --wait 30 device wifi connect "$SSID" ifname "$INTERFACE"
+fi
+
+ACTIVE_UUID="$(nmcli -g GENERAL.CON-UUID device show "$INTERFACE" 2>/dev/null || true)"
+ACTIVE_UUID="${ACTIVE_UUID%%$'\n'*}"
+if test -n "$ACTIVE_UUID" && test "$ACTIVE_UUID" != "--"; then
+  nmcli connection modify uuid "$ACTIVE_UUID" \
+    connection.autoconnect yes \
+    connection.autoconnect-priority 100 \
+    connection.autoconnect-retries 0
+fi
+
+unset PASSWORD
