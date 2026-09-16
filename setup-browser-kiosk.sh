@@ -67,6 +67,18 @@ fi
 sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-runtime" /usr/local/sbin/round-carplay-runtime
 sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-browser-fallback" /usr/local/sbin/round-carplay-browser-fallback
 
+CURSOR_THEME_NAME=round-carplay-transparent
+CURSOR_THEME_ROOT="/usr/local/share/icons/$CURSOR_THEME_NAME"
+sudo install -d -m 0755 "$CURSOR_THEME_ROOT/cursors"
+sudo install -m 0644 \
+  "$REPOSITORY/config/round-carplay-transparent.index.theme" \
+  "$CURSOR_THEME_ROOT/index.theme"
+node "$REPOSITORY/scripts/generate-transparent-cursor.mjs" \
+  | sudo tee "$CURSOR_THEME_ROOT/cursors/left_ptr" >/dev/null
+for cursor_name in default arrow hand hand1 hand2 pointer text xterm watch progress crosshair move; do
+  sudo ln -sfn left_ptr "$CURSOR_THEME_ROOT/cursors/$cursor_name"
+done
+
 sudo tee /etc/pam.d/round-carplay-kiosk >/dev/null <<'PAM'
 auth       required pam_unix.so nullok
 account    required pam_unix.so
@@ -102,6 +114,9 @@ Environment="XDG_RUNTIME_DIR=/run/user/$INSTALL_UID"
 Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$INSTALL_UID/bus"
 Environment="XDG_SESSION_TYPE=wayland"
 Environment="ELECTRON_OZONE_PLATFORM_HINT=wayland"
+Environment="XCURSOR_THEME=$CURSOR_THEME_NAME"
+Environment="XCURSOR_SIZE=1"
+Environment="XCURSOR_PATH=/usr/local/share/icons:/usr/share/icons"
 Environment="WLR_LIBINPUT_NO_DEVICES=1"
 Environment="NO_AT_BRIDGE=1"
 ExecStart=/usr/bin/cage -- "$APPIMAGE" --ozone-platform=wayland --disable-notifications
@@ -177,6 +192,9 @@ Environment="LOGNAME=$INSTALL_USER"
 Environment="XDG_RUNTIME_DIR=/run/user/$INSTALL_UID"
 Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$INSTALL_UID/bus"
 Environment="XDG_SESSION_TYPE=wayland"
+Environment="XCURSOR_THEME=$CURSOR_THEME_NAME"
+Environment="XCURSOR_SIZE=1"
+Environment="XCURSOR_PATH=/usr/local/share/icons:/usr/share/icons"
 Environment="WLR_LIBINPUT_NO_DEVICES=1"
 Environment="NO_AT_BRIDGE=1"
 ExecStartPre=/bin/bash -c 'for attempt in {1..60}; do /usr/bin/curl --fail --silent http://127.0.0.1:$PORT/health >/dev/null && exit 0; sleep 1; done; exit 1'
