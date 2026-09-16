@@ -10,12 +10,20 @@ PROFILE=xiao-camera
 INTERFACE=wlan0
 SSID=XIAO_ESP32S3_Sense
 PASSWORD_FILE=/etc/round-carplay/camera-wifi-password
+PREVIOUS_WIFI_FILE=/run/round-carplay/previous-wifi-uuid
 
 ACTIVE_PROFILE="$(nmcli -g GENERAL.CONNECTION device show "$INTERFACE" 2>/dev/null || true)"
 ACTIVE_PROFILE="${ACTIVE_PROFILE%%$'\n'*}"
 if test "$ACTIVE_PROFILE" = "$PROFILE"; then
   echo "Camera Wi-Fi is already connected"
   exit 0
+fi
+
+PREVIOUS_UUID="$(nmcli -t -f UUID,DEVICE connection show --active | awk -F: '$2 == "wlan0" { print $1; exit }')"
+if [[ "$PREVIOUS_UUID" =~ ^[0-9A-Fa-f-]{36}$ ]]; then
+  install -d -m 0755 "$(dirname "$PREVIOUS_WIFI_FILE")"
+  printf '%s\n' "$PREVIOUS_UUID" > "$PREVIOUS_WIFI_FILE"
+  chmod 0600 "$PREVIOUS_WIFI_FILE"
 fi
 
 test -s "$PASSWORD_FILE" || {

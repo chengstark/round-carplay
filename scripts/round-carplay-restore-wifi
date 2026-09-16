@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+test "$(id -u)" -eq 0 || {
+  echo "Camera Wi-Fi restoration requires root" >&2
+  exit 77
+}
+
+PROFILE=xiao-camera
+INTERFACE=wlan0
+PREVIOUS_WIFI_FILE=/run/round-carplay/previous-wifi-uuid
+
+ACTIVE_PROFILE="$(nmcli -g GENERAL.CONNECTION device show "$INTERFACE" 2>/dev/null || true)"
+ACTIVE_PROFILE="${ACTIVE_PROFILE%%$'\n'*}"
+if test "$ACTIVE_PROFILE" != "$PROFILE"; then
+  rm -f "$PREVIOUS_WIFI_FILE"
+  exit 0
+fi
+
+PREVIOUS_UUID=
+if test -s "$PREVIOUS_WIFI_FILE"; then
+  IFS= read -r PREVIOUS_UUID < "$PREVIOUS_WIFI_FILE"
+fi
+
+if [[ "$PREVIOUS_UUID" =~ ^[0-9A-Fa-f-]{36}$ ]] && \
+   nmcli connection show uuid "$PREVIOUS_UUID" >/dev/null 2>&1; then
+  nmcli --wait 30 connection up uuid "$PREVIOUS_UUID" ifname "$INTERFACE"
+else
+  # No earlier profile was active. Disconnecting releases the radio so the
+  # subsequent menu scan can see every available channel and band.
+  nmcli connection down "$PROFILE"
+fi
+
+rm -f "$PREVIOUS_WIFI_FILE"
