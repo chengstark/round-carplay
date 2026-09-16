@@ -34,7 +34,12 @@ let io: Server | null = null
 const socketEvents: ServiceEventSink = {
   send(channel, payload) {
     if (!io || io.engine.clientsCount === 0) return false
-    if (channel === 'carplay-video-chunk' || channel === 'wifi-camera-frame') {
+    // CarPlay frames must be reliable. A resolution event is emitted just
+    // before the first frame, and Socket.IO may discard a subsequent volatile
+    // packet while that earlier write is still draining. The camera has its
+    // own acknowledgement/backpressure path and intentionally remains live-
+    // edge/volatile.
+    if (channel === 'wifi-camera-frame') {
       io.volatile.emit(channel, payload)
     } else {
       io.emit(channel, payload)

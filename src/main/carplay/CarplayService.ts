@@ -60,6 +60,8 @@ export class CarplayService {
   private shuttingDown = false
   private audioInfoSent = false
   private videoFrameCount = 0
+  private videoWidth = 0
+  private videoHeight = 0
 
   constructor(
     private readonly events: ServiceEventSink = NULL_EVENT_SINK,
@@ -86,10 +88,14 @@ export class CarplayService {
             `[CarplayService] Video frame ${this.videoFrameCount}: ${msg.width}x${msg.height}, ${msg.data.byteLength} bytes`
           )
         }
-        this.events.send('carplay-event', {
-          type: 'resolution',
-          payload: { width: msg.width, height: msg.height }
-        })
+        if (msg.width !== this.videoWidth || msg.height !== this.videoHeight) {
+          this.videoWidth = msg.width
+          this.videoHeight = msg.height
+          this.events.send('carplay-event', {
+            type: 'resolution',
+            payload: { width: msg.width, height: msg.height }
+          })
+        }
         this.sendChunked('carplay-video-chunk', msg.data?.buffer as ArrayBuffer, 512 * 1024)
       } else if (msg instanceof AudioData) {
         if (msg.data) {
@@ -238,6 +244,8 @@ export class CarplayService {
       this.started = true
       this.audioInfoSent = false
       this.videoFrameCount = 0
+      this.videoWidth = 0
+      this.videoHeight = 0
       console.log('[CarplayService] CarPlay started')
     } catch (err) {
       console.error('[CarplayService] Error during start()', err)
@@ -263,6 +271,8 @@ export class CarplayService {
     this.started = false
     this.audioInfoSent = false
     this.videoFrameCount = 0
+    this.videoWidth = 0
+    this.videoHeight = 0
     this.stopping = false
     console.log('[CarplayService] CarPlay stopped')
   }
