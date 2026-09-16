@@ -3,6 +3,8 @@ import { networkInterfaces } from 'node:os'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
+const CAMERA_WIFI_SSID = 'XIAO_ESP32S3_Sense'
+const CAMERA_WIFI_PASSWORD = 'seeedstudio'
 
 export type WifiNetwork = {
   ssid: string
@@ -31,6 +33,18 @@ export type WifiConnectResult = {
 
 /** NetworkManager bridge for the on-display Wi-Fi picker. */
 export class NetworkService {
+  private cameraWifiAttempt: Promise<WifiConnectResult> | null = null
+
+  connectCameraWifi(): Promise<WifiConnectResult> {
+    if (this.cameraWifiAttempt) return this.cameraWifiAttempt
+
+    const attempt = this.connectWifi(CAMERA_WIFI_SSID, CAMERA_WIFI_PASSWORD).finally(() => {
+      if (this.cameraWifiAttempt === attempt) this.cameraWifiAttempt = null
+    })
+    this.cameraWifiAttempt = attempt
+    return attempt
+  }
+
   async scanWifi(): Promise<NetworkSnapshot> {
     if (process.platform !== 'linux') {
       return {

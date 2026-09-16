@@ -57,6 +57,9 @@ Pi setup script also disables Wi-Fi power saving through NetworkManager and at
 kiosk startup to reduce latency spikes and dropouts. Wi-Fi networks selected
 through the on-display system menu are saved as preferred, persistent
 NetworkManager profiles with unlimited automatic reconnect attempts.
+Opening the integrated camera automatically connects the Pi to the firmware's
+default `XIAO_ESP32S3_Sense` hotspot using its bundled `seeedstudio` password,
+so the kiosk does not require keyboard input.
 
 The Camera tab continues to support ordinary USB cameras through the browser
 media-device API. The standalone low-latency SDL diagnostic viewer remains in

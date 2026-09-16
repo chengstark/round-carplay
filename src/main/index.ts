@@ -334,7 +334,12 @@ app.whenReady().then(() => {
   socket = new Socket(config, saveSettings)
 
   ipcMain.handle('quit', () => (process.platform === 'darwin' ? mainWindow?.hide() : app.quit()))
-  ipcMain.handle('wifi-camera-start', (_event, options) => wifiCameraService.start(options))
+  ipcMain.handle('wifi-camera-start', (_event, options) => {
+    void networkService.connectCameraWifi().then(result => {
+      if (!result.ok) console.warn(`[WifiCamera] Camera Wi-Fi connection failed: ${result.message}`)
+    })
+    return wifiCameraService.start(options)
+  })
   ipcMain.handle('wifi-camera-configure', (_event, options) => wifiCameraService.configure(options))
   ipcMain.handle('wifi-camera-stop', () => wifiCameraService.stop())
   ipcMain.on('wifi-camera-frame-ack', () => wifiCameraService.acknowledgeFrame())
