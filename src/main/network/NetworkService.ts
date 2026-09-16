@@ -214,6 +214,8 @@ async function configureCameraWifiProfile(uuid: string): Promise<void> {
     uuid,
     '802-11-wireless.ssid',
     CAMERA_WIFI_SSID,
+    '802-11-wireless.powersave',
+    '2',
     '802-11-wireless-security.key-mgmt',
     'wpa-psk',
     '802-11-wireless-security.psk-flags',
