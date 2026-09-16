@@ -257,18 +257,19 @@ export default function WifiCamera({
           left: '50%',
           transform: 'translateX(-50%)',
           zIndex: 8,
-          width: '42%',
-          minWidth: 180,
-          maxWidth: 204,
+          width: '54%',
+          minWidth: 224,
+          maxWidth: 260,
           boxSizing: 'border-box',
-          padding: '5px 11px 6px',
-          borderRadius: '50%',
+          padding: '7px 12px 8px',
+          borderRadius: 22,
           color: '#fff',
           background: 'rgba(0,0,0,0.72)',
           boxShadow: '0 1px 7px rgba(0,0,0,0.45)',
           textAlign: 'center',
-          fontSize: 9,
-          lineHeight: 1.25,
+          fontSize: 11,
+          lineHeight: 1.3,
+          fontWeight: 500,
           fontVariantNumeric: 'tabular-nums',
           pointerEvents: 'none'
         }}
@@ -286,10 +287,28 @@ export default function WifiCamera({
             ● {diagnosticStateLabel(diagnostics.state)}
           </span>
           <span>· {diagnostics.fps.toFixed(1)} FPS</span>
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 5,
+            marginTop: 2,
+            whiteSpace: 'nowrap'
+          }}
+        >
           {diagnostics.signalDbm != null && (
             <span style={{ color: signalColor(diagnostics.signalDbm) }}>
-              · {diagnostics.signalDbm.toFixed(0)} dBm
+              SIG {diagnostics.signalDbm.toFixed(0)} dBm
             </span>
+          )}
+          {diagnostics.signalDbm != null && diagnostics.noiseDbm != null && <span>·</span>}
+          {diagnostics.noiseDbm != null && (
+            <span>NOISE {diagnostics.noiseDbm.toFixed(0)} dBm</span>
+          )}
+          {diagnostics.signalDbm == null && diagnostics.noiseDbm == null && (
+            <span style={{ opacity: 0.72 }}>Wi-Fi levels unavailable</span>
           )}
         </div>
         <div
@@ -298,14 +317,14 @@ export default function WifiCamera({
             justifyContent: 'center',
             alignItems: 'center',
             gap: 4,
-            marginTop: 1,
+            marginTop: 2,
             opacity: 0.88,
             whiteSpace: 'nowrap'
           }}
         >
           <span
             style={{
-              maxWidth: 70,
+              maxWidth: 82,
               overflow: 'hidden',
               textOverflow: 'ellipsis'
             }}

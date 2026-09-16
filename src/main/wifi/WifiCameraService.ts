@@ -41,6 +41,7 @@ export interface WifiCameraDiagnostics {
   interface?: string
   ssid?: string
   signalDbm?: number
+  noiseDbm?: number
   rxBitrateMbps?: number
   txBitrateMbps?: number
   powerSave?: boolean
@@ -48,7 +49,13 @@ export interface WifiCameraDiagnostics {
 
 type WifiLinkMetrics = Pick<
   WifiCameraDiagnostics,
-  'interface' | 'ssid' | 'signalDbm' | 'rxBitrateMbps' | 'txBitrateMbps' | 'powerSave'
+  | 'interface'
+  | 'ssid'
+  | 'signalDbm'
+  | 'noiseDbm'
+  | 'rxBitrateMbps'
+  | 'txBitrateMbps'
+  | 'powerSave'
 >
 
 /**
@@ -462,6 +469,14 @@ async function readWifiLink(host: string): Promise<WifiLinkMetrics> {
       metrics.signalDbm = parseOptionalNumber(link.match(/^\s*signal:\s*(-?[\d.]+)\s*dBm/m)?.[1])
       metrics.rxBitrateMbps = parseOptionalNumber(link.match(/^\s*rx bitrate:\s*([\d.]+)/m)?.[1])
       metrics.txBitrateMbps = parseOptionalNumber(link.match(/^\s*tx bitrate:\s*([\d.]+)/m)?.[1])
+
+      const frequencyMhz = parseOptionalNumber(link.match(/^\s*freq:\s*(\d+)/m)?.[1])
+      try {
+        const survey = await runCommand('iw', ['dev', interfaceName, 'survey', 'dump'])
+        metrics.noiseDbm = parseSurveyNoise(survey, frequencyMhz)
+      } catch {
+        // Survey noise is optional and is not exposed by every wireless driver.
+      }
     } catch {
       // Keep the route interface even when the wireless driver omits link data.
     }
@@ -491,6 +506,19 @@ function parseOptionalNumber(value: string | undefined): number | undefined {
   if (value == null) return undefined
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function parseSurveyNoise(survey: string, frequencyMhz: number | undefined): number | undefined {
+  const sections = survey.split(/(?=^\s*frequency:)/m)
+  const activeSection = sections.find(section => {
+    if (frequencyMhz != null) {
+      const sectionFrequency = parseOptionalNumber(section.match(/^\s*frequency:\s*(\d+)/m)?.[1])
+      return sectionFrequency === frequencyMhz
+    }
+    return /\[in use\]/i.test(section)
+  })
+
+  return parseOptionalNumber(activeSection?.match(/^\s*noise:\s*(-?[\d.]+)\s*dBm/m)?.[1])
 }
 
 function normalizeOptions(options: Partial<WifiCameraOptions> | null | undefined): WifiCameraOptions {
