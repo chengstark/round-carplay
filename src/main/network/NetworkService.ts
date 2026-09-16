@@ -5,6 +5,8 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 const CAMERA_WIFI_SSID = 'XIAO_ESP32S3_Sense'
 const CAMERA_WIFI_PASSWORD = 'seeedstudio'
+const CAMERA_WIFI_INTERFACE = 'wlan0'
+const CAMERA_WIFI_PROFILE = 'xiao-camera'
 
 export type WifiNetwork = {
   ssid: string
@@ -38,11 +40,46 @@ export class NetworkService {
   connectCameraWifi(): Promise<WifiConnectResult> {
     if (this.cameraWifiAttempt) return this.cameraWifiAttempt
 
-    const attempt = this.connectWifi(CAMERA_WIFI_SSID, CAMERA_WIFI_PASSWORD).finally(() => {
+    const attempt = this.connectCameraWifiInternal().finally(() => {
       if (this.cameraWifiAttempt === attempt) this.cameraWifiAttempt = null
     })
     this.cameraWifiAttempt = attempt
     return attempt
+  }
+
+  private async connectCameraWifiInternal(): Promise<WifiConnectResult> {
+    if (process.platform !== 'linux') {
+      return {
+        ok: false,
+        message: 'Camera Wi-Fi connection is available on Raspberry Pi OS',
+        ipAddresses: this.getIpAddresses()
+      }
+    }
+
+    try {
+      const uuid = await ensureCameraWifiProfile()
+      await runNmcli([
+        '--wait',
+        '30',
+        'connection',
+        'up',
+        'uuid',
+        uuid,
+        'ifname',
+        CAMERA_WIFI_INTERFACE
+      ])
+      return {
+        ok: true,
+        message: `Connected to ${CAMERA_WIFI_SSID}`,
+        ipAddresses: this.getIpAddresses()
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        message: commandErrorMessage(error),
+        ipAddresses: this.getIpAddresses()
+      }
+    }
   }
 
   async scanWifi(): Promise<NetworkSnapshot> {
@@ -143,6 +180,78 @@ export class NetworkService {
       return aWifi - bWifi || a.interface.localeCompare(b.interface)
     })
   }
+}
+
+async function ensureCameraWifiProfile(): Promise<string> {
+  let uuids = await findConnectionUuids(CAMERA_WIFI_PROFILE)
+  if (uuids.length === 0) {
+    await runNmcli([
+      'connection',
+      'add',
+      'type',
+      'wifi',
+      'ifname',
+      CAMERA_WIFI_INTERFACE,
+      'con-name',
+      CAMERA_WIFI_PROFILE,
+      'ssid',
+      CAMERA_WIFI_SSID
+    ])
+    uuids = await findConnectionUuids(CAMERA_WIFI_PROFILE)
+  }
+  if (uuids.length === 0) throw new Error('Camera Wi-Fi profile could not be created')
+
+  for (const uuid of uuids) await configureCameraWifiProfile(uuid)
+  const activeUuids = await findConnectionUuids(CAMERA_WIFI_PROFILE, true)
+  return activeUuids.find(uuid => uuids.includes(uuid)) ?? uuids[0]
+}
+
+async function configureCameraWifiProfile(uuid: string): Promise<void> {
+  await runNmcli([
+    'connection',
+    'modify',
+    'uuid',
+    uuid,
+    '802-11-wireless.ssid',
+    CAMERA_WIFI_SSID,
+    '802-11-wireless-security.key-mgmt',
+    'wpa-psk',
+    '802-11-wireless-security.psk-flags',
+    '0',
+    '802-11-wireless-security.psk',
+    CAMERA_WIFI_PASSWORD,
+    'connection.autoconnect',
+    'yes',
+    'connection.autoconnect-priority',
+    '500',
+    'connection.autoconnect-retries',
+    '0',
+    'ipv4.method',
+    'auto',
+    'ipv6.method',
+    'disabled'
+  ])
+}
+
+async function findConnectionUuids(name: string, activeOnly = false): Promise<string[]> {
+  const args = [
+    '--terse',
+    '--escape',
+    'yes',
+    '--fields',
+    'UUID,NAME',
+    'connection',
+    'show'
+  ]
+  if (activeOnly) args.push('--active')
+  const { stdout } = await runNmcli(args)
+  const matches: string[] = []
+  for (const line of stdout.split(/\r?\n/)) {
+    if (!line) continue
+    const [uuid, connectionName] = splitNmcliLine(line)
+    if (connectionName === name && uuid) matches.push(uuid)
+  }
+  return matches
 }
 
 async function persistActiveWifiProfile(ssid: string, password: string): Promise<void> {
