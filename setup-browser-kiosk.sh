@@ -74,6 +74,13 @@ session    required pam_unix.so
 session    required pam_systemd.so
 PAM
 
+# Cage has no cursor-hiding option. Ignore the round panel's mouse-only event
+# node while retaining its proper multitouch interface.
+sudo install -m 0644 \
+  "$REPOSITORY/config/99-round-carplay-touchscreen-pointer.rules" \
+  /etc/udev/rules.d/99-round-carplay-touchscreen-pointer.rules
+sudo udevadm control --reload-rules
+
 sudo tee /etc/systemd/system/round-carplay-electron.service >/dev/null <<EOF
 [Unit]
 Description=Round CarPlay Electron kiosk

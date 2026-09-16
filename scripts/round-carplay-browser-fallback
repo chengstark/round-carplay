@@ -4,6 +4,21 @@ set -euo pipefail
 selected="$(sed -n '1p' /etc/round-carplay/runtime 2>/dev/null || true)"
 if test "$selected" != browser; then exit 0; fi
 
+# OnFailure is invoked for the first failed start, before systemd has had a
+# chance to apply the kiosk/backend Restart policy. Give both services time to
+# recover and only revert when the browser runtime remains unhealthy.
+for attempt in 1 2 3 4 5 6; do
+  sleep 5
+  selected="$(sed -n '1p' /etc/round-carplay/runtime 2>/dev/null || true)"
+  if test "$selected" != browser; then exit 0; fi
+  if systemctl is-active --quiet round-carplay-backend.service \
+    && systemctl is-active --quiet round-carplay-browser-kiosk.service \
+    && curl --fail --silent --max-time 2 http://127.0.0.1:4000/health >/dev/null; then
+    logger -t round-carplay "Browser runtime recovered after a transient service failure"
+    exit 0
+  fi
+done
+
 /usr/local/sbin/round-carplay-runtime switch electron
-logger -t round-carplay "Browser runtime repeatedly failed; reverting to Electron"
+logger -t round-carplay "Browser runtime remained unhealthy for 30 seconds; reverting to Electron"
 /usr/bin/systemctl reboot

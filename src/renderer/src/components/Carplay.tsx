@@ -9,6 +9,7 @@ import { InitEvent, Renderer } from './worker/render/RenderEvents'
 import useCarplayAudio from './useCarplayAudio'
 import { useCarplayTouch } from './useCarplayTouch'
 import type { CarPlayWorker, KeyCommand } from './worker/types'
+import { BrowserVideoRenderer } from './BrowserVideoRenderer'
 
 const RETRY_DELAY_MS = 3000
 
@@ -60,6 +61,9 @@ const Carplay: React.FC<CarplayProps> = ({
   // RenderWorker + OffscreenCanvas per Ref
   const renderWorkerRef = useRef<Worker | null>(null)
   const offscreenCanvasRef = useRef<OffscreenCanvas | null>(null)
+  const browserVideoRendererRef = useRef<BrowserVideoRenderer | null>(null)
+  const isBrowserRuntime =
+    window.location.protocol === 'http:' || window.location.protocol === 'https:'
 
   // Render settings
   const preferredRenderer = 'auto' //  'auto' | 'webgl2' | 'webgl' | 'webgpu'
@@ -106,6 +110,19 @@ const Carplay: React.FC<CarplayProps> = ({
   // Render Worker Setup
   useEffect(() => {
     if (canvasRef.current && !offscreenCanvasRef.current && !renderWorkerRef.current) {
+      if (isBrowserRuntime) {
+        browserVideoRendererRef.current = new BrowserVideoRenderer(canvasRef.current, () => {
+          window.carplay.ipc.sendFrame().catch((error) => {
+            console.warn('[CARPLAY] Browser decoder frame request failed', error)
+          })
+        })
+        setRenderReady(true)
+        return () => {
+          browserVideoRendererRef.current?.close()
+          browserVideoRendererRef.current = null
+        }
+      }
+
       offscreenCanvasRef.current = canvasRef.current.transferControlToOffscreen()
       const w = new Worker(new URL('./worker/render/Render.worker.ts', import.meta.url), {
         type: 'module'
@@ -129,7 +146,7 @@ const Carplay: React.FC<CarplayProps> = ({
       renderWorkerRef.current = null
       offscreenCanvasRef.current = null
     }
-  }, [videoChannel])
+  }, [isBrowserRuntime, videoChannel])
 
   useEffect(() => {
     if (!renderWorkerRef.current) return
@@ -157,6 +174,11 @@ const Carplay: React.FC<CarplayProps> = ({
     if (!renderReady) return
 
     const handleVideo = (packet: any) => {
+      if (browserVideoRendererRef.current) {
+        browserVideoRendererRef.current.push(packet)
+        return
+      }
+
       const { chunk } = packet
       const transfer = chunk.buffer
 
@@ -401,6 +423,8 @@ const Carplay: React.FC<CarplayProps> = ({
       carplayWorker.terminate()
       renderWorkerRef.current?.terminate()
       renderWorkerRef.current = null
+      browserVideoRendererRef.current?.close()
+      browserVideoRendererRef.current = null
       offscreenCanvasRef.current = null
     }
   }, [carplayWorker])
