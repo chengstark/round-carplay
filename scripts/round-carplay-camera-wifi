@@ -37,8 +37,8 @@ nmcli connection modify "$PROFILE" \
   802-11-wireless-security.key-mgmt wpa-psk \
   802-11-wireless-security.psk-flags 0 \
   802-11-wireless-security.psk "$PASSWORD" \
-  connection.autoconnect yes \
-  connection.autoconnect-priority 500 \
+  connection.autoconnect no \
+  connection.autoconnect-priority 0 \
   connection.autoconnect-retries 0 \
   ipv4.method auto \
   ipv6.method disabled
