@@ -199,6 +199,13 @@ export default function SystemMenu({
       if (!result.ok) {
         setRuntimeStatus((status) => ({ ...status, message: result.message }))
         setRuntimeSwitching(false)
+        return
+      }
+
+      const rebootResult = await window.carplay.update.reboot()
+      if (!rebootResult.ok) {
+        setRuntimeStatus((status) => ({ ...status, message: rebootResult.message }))
+        setRuntimeSwitching(false)
       }
     } catch (error) {
       setRuntimeStatus((status) => ({
