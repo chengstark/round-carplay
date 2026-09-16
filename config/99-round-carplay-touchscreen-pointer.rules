@@ -1,3 +1,8 @@
 # The round panel exposes both multitouch and a synthetic mouse interface.
 # Ignore only the mouse-only event node so Cage does not display its cursor.
 ACTION=="add|change", SUBSYSTEM=="input", KERNEL=="event*", ATTRS{idVendor}=="27c0", ATTRS{idProduct}=="0859", ENV{ID_INPUT_MOUSE}=="1", ENV{ID_INPUT_TOUCHSCREEN}!="1", ENV{LIBINPUT_IGNORE_DEVICE}="1"
+
+# Raspberry Pi HDMI CEC receivers are incorrectly tagged as pointing sticks.
+# This kiosk does not use HDMI remote input, so keep those event nodes out of
+# libinput without affecting the HDMI displays themselves.
+ACTION=="add|change", SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="vc4-hdmi-*", ENV{ID_INPUT_POINTINGSTICK}=="1", ENV{LIBINPUT_IGNORE_DEVICE}="1"
