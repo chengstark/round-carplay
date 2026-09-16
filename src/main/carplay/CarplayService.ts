@@ -71,6 +71,13 @@ export class CarplayService {
       if (msg instanceof Plugged) {
         console.log('[CarplayService] Phone connected through AutoKit')
         this.clearTimeouts()
+        const frameRefreshMs = this.config.phoneConfig?.[msg.phoneType]?.frameInterval
+        if (frameRefreshMs) {
+          console.log(`[CarplayService] Requesting a refresh frame every ${frameRefreshMs}ms`)
+          this.frameInterval = setInterval(() => {
+            void this.driver.send(new SendCommand('frame'))
+          }, frameRefreshMs)
+        }
         this.events.send('carplay-event', { type: 'plugged' })
 
         if (!this.started) {
@@ -96,7 +103,13 @@ export class CarplayService {
             payload: { width: msg.width, height: msg.height }
           })
         }
-        this.sendChunked('carplay-video-chunk', msg.data?.buffer as ArrayBuffer, 512 * 1024)
+        // VideoData.data is a view beginning after AutoKit's 20-byte frame
+        // header. Preserve that header for the renderer while excluding any
+        // unrelated bytes that may surround a Node Buffer view.
+        const packetStart = Math.max(0, msg.data.byteOffset - 20)
+        const packetEnd = msg.data.byteOffset + msg.data.byteLength
+        const packet = (msg.data.buffer as ArrayBuffer).slice(packetStart, packetEnd)
+        this.sendChunked('carplay-video-chunk', packet, 512 * 1024)
       } else if (msg instanceof AudioData) {
         if (msg.data) {
           this.sendChunked('carplay-audio-chunk', msg.data.buffer as ArrayBuffer, 64 * 1024, {
@@ -294,8 +307,14 @@ export class CarplayService {
   }
 
   private clearTimeouts() {
-    if (this.pairTimeout) clearTimeout(this.pairTimeout)
-    if (this.frameInterval) clearInterval(this.frameInterval)
+    if (this.pairTimeout) {
+      clearTimeout(this.pairTimeout)
+      this.pairTimeout = null
+    }
+    if (this.frameInterval) {
+      clearInterval(this.frameInterval)
+      this.frameInterval = null
+    }
   }
 
   private sendChunked(
