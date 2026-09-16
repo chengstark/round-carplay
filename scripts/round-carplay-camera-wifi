@@ -11,6 +11,13 @@ INTERFACE=wlan0
 SSID=XIAO_ESP32S3_Sense
 PASSWORD_FILE=/etc/round-carplay/camera-wifi-password
 
+ACTIVE_PROFILE="$(nmcli -g GENERAL.CONNECTION device show "$INTERFACE" 2>/dev/null || true)"
+ACTIVE_PROFILE="${ACTIVE_PROFILE%%$'\n'*}"
+if test "$ACTIVE_PROFILE" = "$PROFILE"; then
+  echo "Camera Wi-Fi is already connected"
+  exit 0
+fi
+
 test -s "$PASSWORD_FILE" || {
   echo "Camera Wi-Fi password is not installed" >&2
   exit 78
