@@ -51,11 +51,11 @@ export default defineConfig({
           index: resolve(__dirname, 'src/renderer/index.html')
         },
         output: {
-          entryFileNames: 'index.js',
-          assetFileNames: (chunkInfo) => {
-            if (chunkInfo.name?.endsWith('.css')) return 'index.css'
-            return 'assets/[name].[ext]'
-          }
+          // Content hashes are required here: browser releases share one
+          // localhost origin, so a fixed index.js/index.css can survive an OTA
+          // activation in Chromium's cache and keep running the old UI.
+          entryFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash].[ext]'
         }
       }
     },
@@ -66,9 +66,7 @@ export default defineConfig({
       exclude: ['audio.worklet.js'],
       esbuildOptions: {
         define: { global: 'globalThis' },
-        plugins: [
-          NodeGlobalsPolyfillPlugin({ process: true, buffer: true })
-        ]
+        plugins: [NodeGlobalsPolyfillPlugin({ process: true, buffer: true })]
       }
     },
     plugins: [react({})],
