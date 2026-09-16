@@ -137,6 +137,12 @@ const Carplay: React.FC<CarplayProps> = ({
       if (ev.data?.type === 'render-ready') {
         console.log('[CARPLAY] Render worker ready message recived')
         setRenderReady(true)
+      } else if (ev.data?.type === 'decoder-retry') {
+        window.setTimeout(() => {
+          window.carplay.ipc.sendFrame().catch((error) => {
+            console.warn('[CARPLAY] Decoder retry frame request failed', error)
+          })
+        }, 100)
       }
     }
     renderWorkerRef.current.addEventListener('message', handler)

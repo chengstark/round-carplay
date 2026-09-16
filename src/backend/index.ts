@@ -180,6 +180,10 @@ function saveSettings(value: unknown) {
 
 function serveHttp(request: IncomingMessage, response: ServerResponse): void {
   const url = new URL(request.url || '/', `http://${HOST}:${PORT}`)
+  if (url.pathname === '/diagnostics' && request.method === 'POST') {
+    receiveBrowserDiagnostic(request, response)
+    return
+  }
   if (url.pathname === '/health') {
     response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
     response.end(JSON.stringify({ ok: true, runtime: 'browser' }))
@@ -216,6 +220,26 @@ function serveHttp(request: IncomingMessage, response: ServerResponse): void {
     'X-Content-Type-Options': 'nosniff'
   })
   createReadStream(file).pipe(response)
+}
+
+function receiveBrowserDiagnostic(request: IncomingMessage, response: ServerResponse): void {
+  let body = ''
+  request.setEncoding('utf8')
+  request.on('data', (chunk: string) => {
+    if (body.length <= 16_384) body += chunk
+  })
+  request.on('end', () => {
+    try {
+      const diagnostic = JSON.parse(body) as { event?: unknown; detail?: unknown }
+      const event = String(diagnostic.event ?? 'unknown').slice(0, 120)
+      const detail = JSON.stringify(diagnostic.detail ?? {}).slice(0, 4_000)
+      console.log(`[BrowserDiagnostics] ${event} ${detail}`)
+    } catch {
+      console.warn('[BrowserDiagnostics] Invalid diagnostic payload')
+    }
+    response.writeHead(204, { 'Cache-Control': 'no-store' })
+    response.end()
+  })
 }
 
 function isLocalOrigin(origin: string | undefined): boolean {

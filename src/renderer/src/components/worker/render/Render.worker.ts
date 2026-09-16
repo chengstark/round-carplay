@@ -5,7 +5,7 @@ import { WebGLRenderer } from './WebGLRenderer'
 import { WebGPURenderer } from './WebGPURenderer'
 
 export interface FrameRenderer {
-  draw(data: VideoFrame): void
+  draw(data: VideoFrame): void | Promise<void>
 }
 
 const scope = self as unknown as Worker
@@ -28,15 +28,29 @@ export class RendererWorker {
   private renderScheduled = false
   private lastRenderTime: number = 0
   private frameInterval: number = 1000 / 60 // 60Hz
+  private decoderAcceleration: HardwareAcceleration = 'prefer-hardware'
+  private decodedFirstFrame = false
+  private renderedFirstFrame = false
 
   constructor() {
-    this.decoder = new VideoDecoder({
+    this.decoder = this.createDecoder()
+  }
+
+  private createDecoder = () =>
+    new VideoDecoder({
       output: this.onVideoDecoderOutput,
       error: this.onVideoDecoderOutputError
     })
-  }
 
   private onVideoDecoderOutput = (frame: VideoFrame) => {
+    if (!this.decodedFirstFrame) {
+      this.decodedFirstFrame = true
+      reportBrowserDiagnostic('decoder-first-frame', {
+        width: frame.displayWidth,
+        height: frame.displayHeight,
+        acceleration: this.decoderAcceleration
+      })
+    }
     if (this.startTime == null) {
       this.startTime = performance.now()
     } else {
@@ -67,14 +81,53 @@ export class RendererWorker {
     }
 
     if (this.pendingFrame) {
-      this.renderer?.draw(this.pendingFrame)
+      const frame = this.pendingFrame
       this.pendingFrame = null
       this.lastRenderTime = now
+      if (!this.renderer) {
+        frame.close()
+        reportBrowserDiagnostic('render-frame-without-renderer', {})
+        return
+      }
+      Promise.resolve(this.renderer.draw(frame))
+        .then(() => {
+          if (!this.renderedFirstFrame) {
+            this.renderedFirstFrame = true
+            reportBrowserDiagnostic('render-first-frame', {
+              renderer: this.selectedRenderer
+            })
+          }
+        })
+        .catch((error) => {
+          try {
+            frame.close()
+          } catch {}
+          reportBrowserDiagnostic('render-error', {
+            renderer: this.selectedRenderer,
+            message: error instanceof Error ? error.message : String(error)
+          })
+        })
     }
   }
 
   private onVideoDecoderOutputError = (err: Error) => {
     console.error(`[RENDER.WORKER] Decoder error`, err)
+    reportBrowserDiagnostic('decoder-error', {
+      message: err.message,
+      acceleration: this.decoderAcceleration,
+      state: this.decoder.state
+    })
+    this.isConfigured = false
+    this.awaitingValidKeyframe = true
+    this.decodedFirstFrame = false
+    if (this.decoderAcceleration === 'prefer-hardware') {
+      this.decoderAcceleration = 'prefer-software'
+    }
+    try {
+      if (this.decoder.state !== 'closed') this.decoder.close()
+    } catch {}
+    this.decoder = this.createDecoder()
+    scope.postMessage({ type: 'decoder-retry' })
   }
 
   init = async (event: InitEvent & { platform?: string }) => {
@@ -87,6 +140,10 @@ export class RendererWorker {
     this.videoPort.start()
 
     self.postMessage({ type: 'render-ready' })
+    reportBrowserDiagnostic('render-worker-ready', {
+      platform: navigator.platform,
+      webCodecs: typeof VideoDecoder !== 'undefined'
+    })
     console.debug('[RENDER.WORKER] render-ready')
 
     if (event.reportFps) {
@@ -146,12 +203,19 @@ export class RendererWorker {
             `[RENDER.WORKER] Selected renderer: ${r} (` +
               `${mode === 'hw' ? 'hardware' : 'software'})`
           )
+          this.decoderAcceleration = mode === 'hw' ? 'prefer-hardware' : 'prefer-software'
+          reportBrowserDiagnostic('renderer-selected', {
+            renderer: r,
+            acceleration: this.decoderAcceleration,
+            capabilities: results
+          })
           return
         }
       }
     }
 
     console.warn('[RENDER.WORKER] No suitable renderer found')
+    reportBrowserDiagnostic('renderer-unavailable', { capabilities: results })
   }
 
   private async isRendererSupported(
@@ -207,22 +271,41 @@ export class RendererWorker {
   }
 
   private async configureDecoder(config: VideoDecoderConfig) {
-    const accel = this.useHardware ? 'prefer-hardware' : 'prefer-software'
-    const cfg: VideoDecoderConfig = {
-      ...structuredClone(config),
-      hardwareAcceleration: accel,
-      optimizeForLatency: true
-    }
+    const preferences: HardwareAcceleration[] =
+      this.decoderAcceleration === 'prefer-hardware'
+        ? ['prefer-hardware', 'no-preference', 'prefer-software']
+        : ['prefer-software', 'no-preference']
 
-    try {
-      console.debug('[RENDER.WORKER] Configuring decoder with:', cfg)
-      this.decoder.configure(cfg)
-      this.isConfigured = true
-      return true
-    } catch (err) {
-      console.warn(`[RENDER.WORKER] Config ${accel} error`, err)
-      return false
+    for (const acceleration of preferences) {
+      const cfg: VideoDecoderConfig = {
+        ...structuredClone(config),
+        hardwareAcceleration: acceleration,
+        optimizeForLatency: true
+      }
+
+      try {
+        const support = await VideoDecoder.isConfigSupported(cfg)
+        reportBrowserDiagnostic('decoder-config-support', {
+          codec: cfg.codec,
+          codedWidth: cfg.codedWidth,
+          codedHeight: cfg.codedHeight,
+          acceleration,
+          supported: support.supported
+        })
+        if (!support.supported) continue
+        this.decoder.configure(support.config || cfg)
+        this.decoderAcceleration = acceleration
+        this.isConfigured = true
+        return true
+      } catch (err) {
+        console.warn(`[RENDER.WORKER] Config ${acceleration} error`, err)
+        reportBrowserDiagnostic('decoder-config-error', {
+          acceleration,
+          message: err instanceof Error ? err.message : String(err)
+        })
+      }
     }
+    return false
   }
 
   private async processRaw(buffer: ArrayBuffer) {
@@ -239,6 +322,10 @@ export class RendererWorker {
     if (sps && !this.isConfigured) {
       console.debug('[RENDER.WORKER] SPS detected, length:', sps.rawNalu?.length)
       this.lastSPS = sps.rawNalu
+      reportBrowserDiagnostic('decoder-sps', {
+        length: sps.rawNalu?.length,
+        packetBytes: videoData.byteLength
+      })
     }
 
     if (this.awaitingValidKeyframe && !key) {
@@ -249,6 +336,7 @@ export class RendererWorker {
     if (key && this.lastSPS && !this.isConfigured) {
       console.debug('[RENDER.WORKER] First keyframe detected, attempting decoder config...')
       const config = getDecoderConfig(this.lastSPS)
+      if (!config) reportBrowserDiagnostic('decoder-config-missing', {})
       if (config && (await this.configureDecoder(config))) {
         try {
           const chunk = new EncodedVideoChunk({
@@ -281,6 +369,15 @@ export class RendererWorker {
       console.error('[RENDER.WORKER] Error during decoding:', e)
     }
   }
+}
+
+function reportBrowserDiagnostic(event: string, detail: unknown): void {
+  if (self.location.protocol !== 'http:' && self.location.protocol !== 'https:') return
+  void fetch(new URL('/diagnostics', self.location.origin), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event, detail })
+  }).catch(() => undefined)
 }
 
 const worker = new RendererWorker()
