@@ -70,6 +70,7 @@ function normalizeConfig(value: Partial<ExtraConfig>): ExtraConfig {
     nightMode: true,
     audioVolume: 1,
     navVolume: 0.5,
+    outputGain: 10,
     ...value,
     bindings: { ...DEFAULT_BINDINGS, ...(value.bindings ?? {}) }
   } as ExtraConfig
@@ -90,12 +91,18 @@ function normalizeConfig(value: Partial<ExtraConfig>): ExtraConfig {
   )
   merged.wifiCameraHorizontalFlip = merged.wifiCameraHorizontalFlip === true
   merged.gpsSmoothing = Math.min(0.9, Math.max(0, finiteNumber(merged.gpsSmoothing, 0.55)))
+  merged.outputGain = normalizeOutputGain(merged.outputGain)
   return merged
 }
 
 function finiteNumber(value: unknown, fallback: number): number {
   const number = Number(value)
   return Number.isFinite(number) ? number : fallback
+}
+
+function normalizeOutputGain(value: unknown): number {
+  const gain = finiteNumber(value, 10)
+  return Math.min(100, Math.max(5, Math.round(gain / 5) * 5))
 }
 
 function normalizeHost(value: unknown): string {

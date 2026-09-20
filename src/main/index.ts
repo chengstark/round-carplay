@@ -179,6 +179,7 @@ function loadConfig(): ExtraConfig {
     nightMode: true,
     audioVolume: 1.0,
     navVolume: 0.5,
+    outputGain: 10,
     bindings: { ...DEFAULT_BINDINGS },
     ...fileConfig
   } as ExtraConfig
@@ -194,6 +195,7 @@ function loadConfig(): ExtraConfig {
   merged.wifiCameraJpegQuality = normalizeWifiCameraJpegQuality(merged.wifiCameraJpegQuality)
   merged.wifiCameraHorizontalFlip = normalizeWifiCameraHorizontalFlip(merged.wifiCameraHorizontalFlip)
   merged.gpsSmoothing = normalizeGpsSmoothing(merged.gpsSmoothing)
+  merged.outputGain = normalizeOutputGain(merged.outputGain)
 
   const needWrite = !existsSync(configPath) || JSON.stringify(fileConfig) !== JSON.stringify(merged)
 
@@ -435,7 +437,8 @@ function saveSettings(settings: ExtraConfig) {
         wifiCameraFrameSize: normalizeWifiCameraFrameSize(settings.wifiCameraFrameSize),
         wifiCameraJpegQuality: normalizeWifiCameraJpegQuality(settings.wifiCameraJpegQuality),
         wifiCameraHorizontalFlip: normalizeWifiCameraHorizontalFlip(settings.wifiCameraHorizontalFlip),
-        gpsSmoothing: normalizeGpsSmoothing(settings.gpsSmoothing)
+        gpsSmoothing: normalizeGpsSmoothing(settings.gpsSmoothing),
+        outputGain: normalizeOutputGain(settings.outputGain)
       },
       null,
       2
@@ -443,9 +446,10 @@ function saveSettings(settings: ExtraConfig) {
   )
 
   const gpsSmoothing = normalizeGpsSmoothing(settings.gpsSmoothing)
-  config = { ...settings, gpsSmoothing }
+  const outputGain = normalizeOutputGain(settings.outputGain)
+  config = { ...settings, gpsSmoothing, outputGain }
   gpsService.setSmoothing(gpsSmoothing)
-  socket.config = { ...settings, gpsSmoothing }
+  socket.config = { ...settings, gpsSmoothing, outputGain }
   socket.sendSettings()
   electronEvents.send('settings', config)
 
@@ -500,6 +504,12 @@ function normalizeGpsSmoothing(value: unknown): number {
   const smoothing = Number(value)
   if (!Number.isFinite(smoothing)) return 0.55
   return Math.min(0.9, Math.max(0, smoothing))
+}
+
+function normalizeOutputGain(value: unknown): number {
+  const gain = Number(value)
+  if (!Number.isFinite(gain)) return 10
+  return Math.min(100, Math.max(5, Math.round(gain / 5) * 5))
 }
 
 function normalizeBackgroundColor(value: unknown): string {

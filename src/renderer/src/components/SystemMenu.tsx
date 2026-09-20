@@ -31,6 +31,8 @@ type SystemMenuProps = {
   onBackgroundColorChange: (color: string) => void
   gpsSmoothing: number
   onGpsSmoothingChange: (smoothing: number) => void
+  outputGain: number
+  onOutputGainChange: (gain: number) => void
   onClose: () => void
 }
 
@@ -39,6 +41,8 @@ export default function SystemMenu({
   onBackgroundColorChange,
   gpsSmoothing,
   onGpsSmoothingChange,
+  outputGain,
+  onOutputGainChange,
   onClose
 }: SystemMenuProps): React.JSX.Element {
   const [networks, setNetworks] = useState<WifiNetwork[]>([])
@@ -63,10 +67,15 @@ export default function SystemMenu({
     message: 'Checking browser version…'
   })
   const [gpsSmoothingDraft, setGpsSmoothingDraft] = useState(gpsSmoothing)
+  const [outputGainDraft, setOutputGainDraft] = useState(outputGain)
 
   useEffect(() => {
     setGpsSmoothingDraft(gpsSmoothing)
   }, [gpsSmoothing])
+
+  useEffect(() => {
+    setOutputGainDraft(outputGain)
+  }, [outputGain])
 
   const refreshNetworks = useCallback(async (): Promise<void> => {
     setScanning(true)
@@ -327,6 +336,34 @@ export default function SystemMenu({
           sx={{ minWidth: 30, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
         >
           {Math.round(gpsSmoothingDraft * 100)}%
+        </Typography>
+      </Box>
+
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.7 }}>
+        <Typography variant="caption" sx={{ flex: '0 0 auto', opacity: 0.72 }}>
+          Output gain
+        </Typography>
+        <Slider
+          aria-label="CarPlay output gain"
+          value={outputGainDraft}
+          min={5}
+          max={100}
+          step={5}
+          valueLabelDisplay="auto"
+          valueLabelFormat={(value) => `${value}×`}
+          onChange={(_, value) => {
+            if (typeof value === 'number') setOutputGainDraft(value)
+          }}
+          onChangeCommitted={(_, value) => {
+            if (typeof value === 'number') onOutputGainChange(value)
+          }}
+          sx={{ minWidth: 0, py: 0.5, color: '#e6e3db' }}
+        />
+        <Typography
+          variant="caption"
+          sx={{ minWidth: 36, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+        >
+          {outputGainDraft}×
         </Typography>
       </Box>
 

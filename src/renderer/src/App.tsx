@@ -179,6 +179,10 @@ function App() {
     if (settings) saveSettings({ ...settings, gpsSmoothing });
   };
 
+  const changeOutputGain = (outputGain: number) => {
+    if (settings) saveSettings({ ...settings, outputGain });
+  };
+
   useEffect(() => {
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
@@ -311,6 +315,8 @@ function App() {
                 onBackgroundColorChange={changeBackgroundColor}
                 gpsSmoothing={settings?.gpsSmoothing ?? 0.55}
                 onGpsSmoothingChange={changeGpsSmoothing}
+                outputGain={settings?.outputGain ?? 10}
+                onOutputGainChange={changeOutputGain}
                 onClose={() => setSystemMenuOpen(false)}
               />
             )}

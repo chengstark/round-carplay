@@ -5,24 +5,21 @@ import { AudioPlayerKey, CarPlayWorker } from './worker/types'
 import { createAudioPlayerKey } from './worker/utils'
 import { useCarplayStore } from '../store/store'
 
-// Web Audio gain is linear: 1 is unity gain, so 10 provides the requested
-// tenfold software preamp while the settings sliders remain normalized 0–1.
-const SOFTWARE_OUTPUT_GAIN = 10
-
 const useCarplayAudio = (worker: CarPlayWorker) => {
   const [audioPlayers] = useState(new Map<AudioPlayerKey, PcmPlayer>())
   const audioVolume = useCarplayStore(s => s.settings?.audioVolume ?? 1.0)
   const navVolume = useCarplayStore(s => s.settings?.navVolume ?? 0.5)
+  const outputGain = useCarplayStore(s => s.settings?.outputGain ?? 10)
 
   useEffect(() => {
     audioPlayers.forEach((player, key) => {
       if (key.includes('navi') || key.endsWith('2') || key.endsWith('3')) {
-        player.volume(navVolume * SOFTWARE_OUTPUT_GAIN)
+        player.volume(navVolume * outputGain)
       } else {
-        player.volume(audioVolume * SOFTWARE_OUTPUT_GAIN)
+        player.volume(audioVolume * outputGain)
       }
     })
-  }, [audioVolume, navVolume, audioPlayers])
+  }, [audioVolume, navVolume, outputGain, audioPlayers])
 
   const getCommandName = (cmd?: number) => {
     if (typeof cmd === 'number' && cmd in AudioCommand) {
@@ -54,11 +51,11 @@ const useCarplayAudio = (worker: CarPlayWorker) => {
 
       const isNav = audioType === 2 || audioType === 3
       const configuredVolume = isNav ? navVolume : audioVolume
-      player.volume(configuredVolume * SOFTWARE_OUTPUT_GAIN)
+      player.volume(configuredVolume * outputGain)
 
       return player
     },
-    [audioPlayers, worker, audioVolume, navVolume]
+    [audioPlayers, worker, audioVolume, navVolume, outputGain]
   )
 
   const processAudio = useCallback(
@@ -67,17 +64,17 @@ const useCarplayAudio = (worker: CarPlayWorker) => {
       console.log('[Audio] decodeType:', audio.decodeType, 'audioType:', audio.audioType, 'command:', audio.command, '(', getCommandName(audio.command), ')')
 
       if (audio.command === AudioCommand.AudioNaviStart) {
-        setTimeout(() => player.volume(navVolume * SOFTWARE_OUTPUT_GAIN), 10)
+        setTimeout(() => player.volume(navVolume * outputGain), 10)
       } else if (audio.volumeDuration && typeof audio.volume === 'number') {
         const isNav = audio.audioType === 2 || audio.audioType === 3
         const configuredVolume = isNav ? navVolume : audioVolume
         player.volume(
-          audio.volume * configuredVolume * SOFTWARE_OUTPUT_GAIN,
+          audio.volume * configuredVolume * outputGain,
           audio.volumeDuration
         )
       }
     },
-    [audioVolume, getAudioPlayer, navVolume]
+    [audioVolume, getAudioPlayer, navVolume, outputGain]
   )
 
   useEffect(() => {

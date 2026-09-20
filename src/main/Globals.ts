@@ -14,6 +14,7 @@ export type ExtraConfig = DongleConfig & {
   bindings: KeyBindings,
   audioVolume: number;
   navVolume: number;
+  outputGain: number;
 }
 
 /** Clockwise camera rotation in degrees, normalized to the range 0–359. */
