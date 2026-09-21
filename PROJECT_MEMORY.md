@@ -24,6 +24,9 @@
   profile if activation fails. The on-display Wi-Fi menu must never disconnect
   the active profile merely to scan; a partial list is safer than stranding the
   kiosk off-network.
+- Selecting `backcam_aee72870` in the ordinary Wi-Fi menu launches the same
+  protected camera workflow as the dedicated camera control. It must not use
+  the generic password connector or expose the root-only camera password.
 
 The protocol analysis and standalone probe live in the sibling workspace at
 `/Users/starkguo/Documents/wifi_backup_cam`.

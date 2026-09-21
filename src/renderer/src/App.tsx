@@ -317,6 +317,10 @@ function App() {
                 onGpsSmoothingChange={changeGpsSmoothing}
                 outputGain={settings?.outputGain ?? 10}
                 onOutputGainChange={changeOutputGain}
+                onCameraOpen={() => {
+                  setSystemMenuOpen(false)
+                  setWifiCameraMode(true)
+                }}
                 onClose={() => setSystemMenuOpen(false)}
               />
             )}
