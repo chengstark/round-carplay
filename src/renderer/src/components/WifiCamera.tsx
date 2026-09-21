@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   FormControl,
-  FormControlLabel,
   IconButton,
   MenuItem,
   Select,
   Slider,
   Stack,
-  Switch,
   Typography
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
@@ -29,7 +27,7 @@ type CameraStatus = {
   message: string
 }
 
-/** Integrated XIAO ESP32-S3 Wi-Fi camera surface. The USB Camera component remains
+/** Integrated E-Eye Wi-Fi camera surface. The USB Camera component remains
  * separate and continues to back the existing /camera route. */
 export default function WifiCamera({
   rotation,
@@ -50,8 +48,6 @@ export default function WifiCamera({
   const [calibrating, setCalibrating] = useState(false)
   const [draftRotation, setDraftRotation] = useState(rotation)
   const [draftFrameSize, setDraftFrameSize] = useState(cameraOptions.frameSize)
-  const [draftJpegQuality, setDraftJpegQuality] = useState(cameraOptions.jpegQuality)
-  const [draftHorizontalFlip, setDraftHorizontalFlip] = useState(cameraOptions.horizontalFlip)
   const [hasFrame, setHasFrame] = useState(false)
   const [status, setStatus] = useState<CameraStatus>({
     state: 'connecting',
@@ -78,15 +74,8 @@ export default function WifiCamera({
   useEffect(() => {
     if (!calibrating) {
       setDraftFrameSize(cameraOptions.frameSize)
-      setDraftJpegQuality(cameraOptions.jpegQuality)
-      setDraftHorizontalFlip(cameraOptions.horizontalFlip)
     }
-  }, [
-    cameraOptions.frameSize,
-    cameraOptions.jpegQuality,
-    cameraOptions.horizontalFlip,
-    calibrating
-  ])
+  }, [cameraOptions.frameSize, calibrating])
 
   const updateDraftRotation = (value: number): void => {
     const rounded = Math.round(value)
@@ -107,15 +96,9 @@ export default function WifiCamera({
     setCalibrating(true)
   }
 
-  const applyCameraTuning = async (
-    frameSize: WifiCameraFrameSize,
-    jpegQuality: number,
-    horizontalFlip: boolean
-  ): Promise<void> => {
-    const next = { ...cameraOptions, frameSize, jpegQuality, horizontalFlip }
+  const applyCameraTuning = async (frameSize: WifiCameraFrameSize): Promise<void> => {
+    const next = { ...cameraOptions, frameSize }
     setDraftFrameSize(frameSize)
-    setDraftJpegQuality(jpegQuality)
-    setDraftHorizontalFlip(horizontalFlip)
     onCameraOptionsSave(next)
 
     const result = await window.carplay.wifiCamera.configure(next)
@@ -386,7 +369,7 @@ export default function WifiCamera({
             </Typography>
             {status.state === 'error' && (
               <Typography variant="caption" sx={{ mt: 1.5, opacity: 0.65 }}>
-                Connect this device to the XIAO camera Wi-Fi network.
+                Connect this device to the backupcam_aee782870 Wi-Fi network.
               </Typography>
             )}
           </div>
@@ -526,7 +509,7 @@ export default function WifiCamera({
                 value={draftFrameSize}
                 onChange={event => {
                   const frameSize = Number(event.target.value) as WifiCameraFrameSize
-                  void applyCameraTuning(frameSize, draftJpegQuality, draftHorizontalFlip)
+                  void applyCameraTuning(frameSize)
                 }}
                 sx={{
                   color: '#fff',
@@ -542,49 +525,12 @@ export default function WifiCamera({
                 ))}
               </Select>
             </FormControl>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="caption" display="block" align="center">
-                JPEG compression {draftJpegQuality}
-              </Typography>
-              <Slider
-                aria-label="Wi-Fi camera JPEG compression"
-                value={draftJpegQuality}
-                min={4}
-                max={63}
-                step={1}
-                valueLabelDisplay="auto"
-                onChange={(_, value) => {
-                  if (typeof value === 'number') setDraftJpegQuality(value)
-                }}
-                onChangeCommitted={(_, value) => {
-                  if (typeof value === 'number') {
-                    void applyCameraTuning(draftFrameSize, value, draftHorizontalFlip)
-                  }
-                }}
-                sx={{ color: '#e6e3db' }}
-              />
-            </div>
+            <Typography variant="caption" sx={{ flex: 1, opacity: 0.8 }}>
+              E-Eye H.265 · 25 FPS. VGA 640×480 is validated.
+            </Typography>
           </Stack>
-          <FormControlLabel
-            control={(
-              <Switch
-                checked={draftHorizontalFlip}
-                onChange={(_, checked) => {
-                  void applyCameraTuning(draftFrameSize, draftJpegQuality, checked)
-                }}
-                sx={{
-                  '& .MuiSwitch-switchBase.Mui-checked': { color: '#e6e3db' },
-                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                    backgroundColor: '#8f989f'
-                  }
-                }}
-              />
-            )}
-            label="Mirror image (horizontal flip)"
-            sx={{ display: 'flex', justifyContent: 'center', mx: 0, mt: 0.5 }}
-          />
           <Typography variant="caption" display="block" align="center" sx={{ opacity: 0.72 }}>
-            Higher compression values usually reduce latency. Changes apply live and are saved.
+            Resolution changes reconnect the stream and are saved.
           </Typography>
           <Typography
             variant="caption"

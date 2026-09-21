@@ -26,45 +26,38 @@ Support for Linux (ARM/x86) and macOS (ARM) as well. It is a standalone Electron
 
 ## Wi-Fi backup camera
 
-The right-side crescent button opens the integrated XIAO ESP32-S3 Wi-Fi backup
-camera. Double-tap the button to open or close the feed. The host running Round
-CarPlay must be connected to the XIAO camera's Wi-Fi network. The application
-configures the camera through `http://192.168.4.1/control` and receives standard
-multipart MJPEG from `http://192.168.4.1:81/stream`. Stream connection and saved
-camera configuration begin together, allowing the first frame to appear without
-waiting for both control requests to finish. A compact live strip at the top of
-the camera screen reports stream state, FPS, data rate, frame size, Wi-Fi SSID,
-signal strength, link rates, power-saving state, and reconnect count. If the
-MJPEG feed closes or stops producing frames, the frozen image is cleared and the
-application reconnects automatically.
+The right-side crescent button opens the integrated E-Eye Wi-Fi backup camera.
+Double-tap the button to open or close the feed. The host running Round CarPlay
+must be connected to `backupcam_aee782870`. The application sends XMIP control JSON
+to `192.168.10.1:2222`, receives framed H.265 media from TCP port `2223`, and
+uses ffmpeg to decode it for Chromium. A compact live strip at the top of the
+camera screen reports stream state, decoded FPS, H.265 data rate, frame size,
+Wi-Fi SSID, signal strength, link rates, power-saving state, and reconnect count.
+If the feed closes or stops producing frames, the frozen image is cleared and
+the application reconnects automatically.
 The complete 16:9 camera image is displayed as the largest rectangle that fits
 inside the circular screen, so none of the source frame is cropped. The camera
 can be rotated continuously from `0°` through `359°`; the slider and `−1°` /
 `+1°` buttons support coarse and fine adjustment, and the selection is saved
 across restarts. For visual calibration, tap the adjustment button at the top
-center of the live feed. Resolution, JPEG compression, and horizontal mirroring
-can also be tuned from that panel while video is streaming; changes apply
-immediately and persist in the application config. HD `1280×720`, matching the
-previous JieLi camera, is the default. Lower resolutions and higher compression
-values are available when lower latency is more important than detail. While the
-camera is open it covers the clock and surround controls and provides a dedicated
-exit button at the upper left.
+center of the live feed. Resolution changes are sent in the XMIP `realplay`
+request and persist in the application config. VGA `640×480` at 25 FPS is the
+validated default. While the camera is open it covers the clock and surround
+controls and provides a dedicated exit button at the upper left.
 
-No XIAO firmware update is required for these tuning controls. Round CarPlay
-sends the selected frame size, JPEG compression, and horizontal-mirror state to
-the firmware's existing HTTP `/control` endpoint whenever the camera opens. The
-Pi setup script also disables Wi-Fi power saving through NetworkManager and at
-kiosk startup to reduce latency spikes and dropouts. Wi-Fi networks selected
+The Pi setup script installs ffmpeg and disables Wi-Fi power saving through
+NetworkManager and at kiosk startup to reduce latency spikes and dropouts. Wi-Fi networks selected
 through the on-display system menu are saved as preferred, persistent
 NetworkManager profiles with unlimited automatic reconnect attempts.
-Opening the integrated camera automatically connects the Pi to the firmware's
-default `XIAO_ESP32S3_Sense` hotspot using the password stored by the installer,
+Opening the integrated camera automatically connects the Pi to the
+`backupcam_aee782870` hotspot using the password stored by the installer,
 so the kiosk does not require keyboard input. The camera connection profile
 explicitly disables Wi-Fi power saving each time it is repaired and activated.
+Closing the camera restores the Wi-Fi profile that was active before it opened.
 
 The Camera tab continues to support ordinary USB cameras through the browser
-media-device API. The standalone low-latency SDL diagnostic viewer remains in
-[`wifi_cam`](wifi_cam/README.md).
+media-device API. The older XIAO-only SDL diagnostic viewer is retained for
+reference in [`wifi_cam`](wifi_cam/README.md); it is not used by E-Eye.
 
 ## GPS speedometer
 

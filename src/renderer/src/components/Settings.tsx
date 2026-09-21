@@ -276,11 +276,11 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
 
           <Grid size={{ xs: 3 }} sx={{ minWidth: 180, mx: 2 }}>
             <TextField
-              label="XIAO CAMERA ADDRESS"
+              label="E-EYE CAMERA ADDRESS"
               fullWidth
               value={activeSettings.wifiCameraHost}
               onChange={event => settingsChange('wifiCameraHost', event.target.value)}
-              helperText="Default: 192.168.4.1"
+              helperText="Default: 192.168.10.1"
             />
           </Grid>
 
@@ -303,42 +303,10 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
             </FormControl>
           </Grid>
 
-          <Grid size={{ xs: 6 }} sx={{ minWidth: 280, mx: 2 }}>
-            <FormControl fullWidth>
-              <FormLabel>
-                WI-FI CAMERA JPEG COMPRESSION — {activeSettings.wifiCameraJpegQuality}
-              </FormLabel>
-              <Slider
-                value={activeSettings.wifiCameraJpegQuality}
-                min={4}
-                max={63}
-                step={1}
-                marks={[
-                  { value: 10, label: 'High detail' },
-                  { value: 20, label: 'Default' },
-                  { value: 40, label: 'Lower latency' }
-                ]}
-                valueLabelDisplay="auto"
-                onChange={(_, value) => {
-                  if (typeof value === 'number') settingsChange('wifiCameraJpegQuality', value)
-                }}
-              />
-              <Typography variant="caption" color="text.secondary">
-                Higher values use more compression and usually stream faster.
-              </Typography>
-            </FormControl>
-          </Grid>
-
-          <Grid size={{ xs: 3 }} sx={{ minWidth: 180, mx: 2, display: 'flex', alignItems: 'center' }}>
-            <FormControlLabel
-              control={(
-                <Checkbox
-                  checked={activeSettings.wifiCameraHorizontalFlip}
-                  onChange={event => settingsChange('wifiCameraHorizontalFlip', event.target.checked)}
-                />
-              )}
-              label="WI-FI CAMERA HORIZONTAL FLIP"
-            />
+          <Grid size={{ xs: 3 }} sx={{ minWidth: 220, mx: 2, display: 'flex', alignItems: 'center' }}>
+            <Typography variant="caption" color="text.secondary">
+              E-Eye sends H.265 at 25 FPS. VGA 640×480 is the validated mode.
+            </Typography>
           </Grid>
 
           <Grid size={{ xs: 3 }} sx={{ minWidth: 140, mx: 2, display: 'flex', justifyContent: 'center' }}>

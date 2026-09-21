@@ -606,7 +606,7 @@ function App() {
         />
 
         {/* Matching control in the right crescent. It toggles the integrated
-            XIAO ESP32-S3 Wi-Fi camera path; the existing USB camera route remains
+            E-Eye Wi-Fi camera path; the existing USB camera route remains
             available from the CarPlay navigation tabs. Keeping this button
             above the video surface lets the same double-tap close it again. */}
         <CrescentButton
@@ -630,8 +630,8 @@ function App() {
             <WifiCamera
               rotation={settings?.wifiCameraRotation ?? 0}
               cameraOptions={{
-                host: settings?.wifiCameraHost ?? '192.168.4.1',
-                frameSize: settings?.wifiCameraFrameSize ?? 11,
+                host: settings?.wifiCameraHost ?? '192.168.10.1',
+                frameSize: settings?.wifiCameraFrameSize ?? 8,
                 jpegQuality: settings?.wifiCameraJpegQuality ?? 20,
                 horizontalFlip: settings?.wifiCameraHorizontalFlip ?? false
               }}

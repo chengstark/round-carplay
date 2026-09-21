@@ -1,8 +1,11 @@
 # Browser Kiosk Runtime
 
 The `browser-kiosk` branch runs the existing React UI in Chromium while a local Node.js service
-owns CarPlay USB, audio, GPS, NetworkManager, and the XIAO Wi-Fi camera. The API and UI bind only to
+owns CarPlay USB, audio, GPS, NetworkManager, and the E-Eye Wi-Fi camera. The API and UI bind only to
 `127.0.0.1` and continue to work without internet access.
+
+This is the canonical runtime for current development. See `PROJECT_MEMORY.md`
+for the durable project assumptions and camera protocol summary.
 
 ## Local build and preview
 

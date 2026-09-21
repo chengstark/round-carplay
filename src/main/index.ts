@@ -170,8 +170,8 @@ function loadConfig(): ExtraConfig {
     camera: '',
     backgroundColor: '#000000',
     wifiCameraRotation: 0,
-    wifiCameraHost: '192.168.4.1',
-    wifiCameraFrameSize: 11,
+    wifiCameraHost: '192.168.10.1',
+    wifiCameraFrameSize: 8,
     wifiCameraJpegQuality: 20,
     wifiCameraHorizontalFlip: false,
     gpsSmoothing: 0.55,
@@ -474,20 +474,20 @@ function normalizeWifiCameraRotation(value: unknown): number {
 
 function normalizeWifiCameraHost(value: unknown): string {
   const candidate = String(value ?? '').trim()
-  if (!candidate) return '192.168.4.1'
+  if (!candidate) return '192.168.10.1'
 
   try {
     const url = new URL(candidate.includes('://') ? candidate : `http://${candidate}`)
-    return url.hostname || '192.168.4.1'
+    return url.hostname || '192.168.10.1'
   } catch {
-    return '192.168.4.1'
+    return '192.168.10.1'
   }
 }
 
 function normalizeWifiCameraFrameSize(value: unknown): WifiCameraFrameSize {
   const frameSize = Number(value)
   const supported = WIFI_CAMERA_RESOLUTIONS.some(resolution => resolution.value === frameSize)
-  return supported ? frameSize as WifiCameraFrameSize : 11
+  return supported ? frameSize as WifiCameraFrameSize : 8
 }
 
 function normalizeWifiCameraJpegQuality(value: unknown): number {

@@ -1,23 +1,22 @@
-import { execFile } from 'node:child_process'
-import http, { ClientRequest, IncomingMessage } from 'node:http'
+import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { Socket } from 'node:net'
 import { promisify } from 'node:util'
-import type { WifiCameraFrameSize, WifiCameraOptions } from '../Globals'
+import { WIFI_CAMERA_RESOLUTIONS, type WifiCameraFrameSize, type WifiCameraOptions } from '../Globals'
 import { NULL_EVENT_SINK, type ServiceEventSink } from '../events/ServiceEventSink'
 
 const execFileAsync = promisify(execFile)
-
 const DEFAULT_OPTIONS: WifiCameraOptions = {
-  host: '192.168.4.1',
-  frameSize: 11,
-  jpegQuality: 20,
-  horizontalFlip: false
+  host: '192.168.10.1', frameSize: 8, jpegQuality: 20, horizontalFlip: false
 }
-const CONTROL_PORT = 80
-const STREAM_PORT = 81
-const MAX_FRAME_SIZE = 16 * 1024 * 1024
+const CONTROL_PORT = 2222
+const MEDIA_PORT = 2223
+const XMIP_MAGIC = Buffer.from('XMIP')
+const XMIP_HEADER_SIZE = 9
+const MAX_PAYLOAD_SIZE = 16 * 1024 * 1024
 const RECONNECT_DELAY_MS = 1_000
 const DIAGNOSTICS_INTERVAL_MS = 1_000
-const STALE_STREAM_MS = 2_500
+const HEARTBEAT_INTERVAL_MS = 2_000
+const STALE_STREAM_MS = 3_500
 const JPEG_START = Buffer.from([0xff, 0xd8])
 const JPEG_END = Buffer.from([0xff, 0xd9])
 const SUPPORTED_FRAME_SIZES = new Set<number>([5, 8, 9, 10, 11])
@@ -47,30 +46,27 @@ export interface WifiCameraDiagnostics {
   powerSave?: boolean
 }
 
-type WifiLinkMetrics = Pick<
-  WifiCameraDiagnostics,
-  | 'interface'
-  | 'ssid'
-  | 'signalDbm'
-  | 'noiseDbm'
-  | 'rxBitrateMbps'
-  | 'txBitrateMbps'
-  | 'powerSave'
->
+type WifiLinkMetrics = Pick<WifiCameraDiagnostics,
+  'interface' | 'ssid' | 'signalDbm' | 'noiseDbm' | 'rxBitrateMbps' | 'txBitrateMbps' | 'powerSave'>
 
 /**
- * XIAO ESP32-S3 HTTP camera client used by the round-display UI.
- *
- * The camera exposes ESP32 CameraWebServer controls on port 80 and a multipart
- * MJPEG stream on port 81. Only one JPEG is allowed to be in flight to the
- * renderer; if Chromium is still decoding it, newer complete frames replace
- * the pending frame so latency cannot grow into a backlog. A stalled or closed
- * stream reconnects automatically while the camera surface remains open.
+ * E-Eye XMIP camera client. Control JSON is framed over TCP 2222 and H.265
+ * access units arrive over TCP 2223. ffmpeg decodes to an MJPEG pipe so both
+ * shells keep the existing JPEG event contract and browser Chromium does not
+ * need native HEVC support.
  */
 export class WifiCameraService {
-  private streamRequest: ClientRequest | null = null
-  private streamResponse: IncomingMessage | null = null
-  private streamBuffer = Buffer.alloc(0)
+  private controlSocket: Socket | null = null
+  private mediaSocket: Socket | null = null
+  private decoder: ChildProcessWithoutNullStreams | null = null
+  private controlBuffer = Buffer.alloc(0)
+  private mediaBuffer = Buffer.alloc(0)
+  private jpegBuffer = Buffer.alloc(0)
+  private decoderError = ''
+  private decoderBackpressured = false
+  private awaitingKeyframe = true
+  private expectedSequence: number | null = null
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null
   private options: WifiCameraOptions = DEFAULT_OPTIONS
   private running = false
   private starting: Promise<WifiCameraStartResult> | null = null
@@ -82,7 +78,6 @@ export class WifiCameraService {
   private diagnosticsTimer: ReturnType<typeof setInterval> | null = null
   private diagnosticsBusy = false
   private state: CameraState = 'stopped'
-
   private reportStartedAt = Date.now()
   private reportFrames = 0
   private reportBytes = 0
@@ -98,50 +93,85 @@ export class WifiCameraService {
 
   constructor(private readonly events: ServiceEventSink = NULL_EVENT_SINK) {}
 
-  isActive(): boolean {
-    return this.running
-  }
+  isActive(): boolean { return this.running }
 
   start(options: WifiCameraOptions): Promise<WifiCameraStartResult> {
     const normalized = normalizeOptions(options)
     if (this.starting) return this.starting
     if (this.running) return this.configure(normalized)
-
     this.options = normalized
     this.running = true
     this.resetDiagnostics()
     this.startDiagnostics()
-    this.starting = this.connectStream(false).finally(() => {
-      this.starting = null
-    })
+    this.starting = this.connectStream(false).finally(() => { this.starting = null })
     return this.starting
+  }
+
+  async configure(options: WifiCameraOptions): Promise<WifiCameraStartResult> {
+    const normalized = normalizeOptions(options)
+    const transportChanged = normalized.host !== this.options.host ||
+      normalized.frameSize !== this.options.frameSize
+    this.options = normalized
+    if (!this.running || !transportChanged) return { ok: true }
+    this.sendStatus('connecting', 'Applying E-Eye stream settings…')
+    return this.connectStream(true)
+  }
+
+  stop(): void {
+    this.running = false
+    this.clearReconnectTimer()
+    this.stopDiagnostics()
+    this.closeTransport()
+    this.sendStatus('stopped', 'E-Eye camera stopped')
+  }
+
+  acknowledgeFrame(): void {
+    this.rendererBusy = false
+    if (!this.running || !this.pendingFrame) return
+    const next = this.pendingFrame
+    this.pendingFrame = null
+    this.deliverFrame(next)
   }
 
   private async connectStream(isReconnect: boolean): Promise<WifiCameraStartResult> {
     this.clearReconnectTimer()
     this.closeTransport()
     if (!this.running) return { ok: false, error: 'Camera start cancelled' }
-
     const generation = this.connectionGeneration
-    this.streamBuffer = Buffer.alloc(0)
-    this.rendererBusy = false
-    this.pendingFrame = null
-    this.receivedFrame = false
     this.connectionStartedAt = Date.now()
     this.lastFrameAt = 0
-    this.lastFrameSize = 0
-    this.sendStatus(
-      'connecting',
-      isReconnect
-        ? `Reconnecting to XIAO camera at ${this.options.host}…`
-        : `Opening XIAO camera at ${this.options.host}…`
-    )
+    this.sendStatus('connecting', isReconnect
+      ? `Reconnecting to E-Eye camera at ${this.options.host}…`
+      : `Opening E-Eye camera at ${this.options.host}…`)
 
     try {
-      // The live tuning panel already changes sensor settings during an active
-      // stream, so startup can safely do the same. Frame delivery is event-driven
-      // and does not wait for the saved controls to finish.
-      await Promise.all([this.openStream(generation), this.applyCameraSettings(this.options)])
+      const controlSocket = await openSocket(this.options.host, CONTROL_PORT)
+      const provisionalControlError = (): void => {}
+      controlSocket.on('error', provisionalControlError)
+      let mediaSocket: Socket
+      try {
+        mediaSocket = await openSocket(this.options.host, MEDIA_PORT)
+      } catch (error) {
+        controlSocket.destroy()
+        throw error
+      }
+      controlSocket.off('error', provisionalControlError)
+      if (!this.running || generation !== this.connectionGeneration) {
+        controlSocket.destroy()
+        mediaSocket.destroy()
+        return { ok: false, error: 'Camera start cancelled' }
+      }
+      this.controlSocket = controlSocket
+      this.mediaSocket = mediaSocket
+      this.attachSocketHandlers(controlSocket, mediaSocket, generation)
+      await this.startDecoder(generation)
+      this.sendControlRequest('heartbeat', { channel: 0 })
+      this.sendRealplayRequest()
+      this.heartbeatTimer = setInterval(() => {
+        if (this.running && generation === this.connectionGeneration) {
+          this.sendControlRequest('heartbeat', { channel: 0 })
+        }
+      }, HEARTBEAT_INTERVAL_MS)
       return { ok: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -153,182 +183,214 @@ export class WifiCameraService {
     }
   }
 
-  async configure(options: WifiCameraOptions): Promise<WifiCameraStartResult> {
-    const normalized = normalizeOptions(options)
-    const hostChanged = normalized.host !== this.options.host
-    const imageTuningChanged = normalized.frameSize !== this.options.frameSize ||
-      normalized.jpegQuality !== this.options.jpegQuality
-    const mirrorChanged = normalized.horizontalFlip !== this.options.horizontalFlip
-    this.options = normalized
-
-    if (!this.running) return { ok: true }
-    if (hostChanged) {
-      return {
-        ok: false,
-        error: 'Camera address saved. Close and reopen the camera to connect to the new address.'
+  private attachSocketHandlers(control: Socket, media: Socket, generation: number): void {
+    control.on('data', chunk => {
+      if (this.running && generation === this.connectionGeneration) {
+        this.consumeXmipChunk('control', Buffer.from(chunk), generation)
       }
+    })
+    media.on('data', chunk => {
+      if (this.running && generation === this.connectionGeneration) {
+        this.consumeXmipChunk('media', Buffer.from(chunk), generation)
+      }
+    })
+    for (const [name, socket] of [['control', control], ['media', media]] as const) {
+      socket.on('error', error => this.handleStreamFailure(
+        `Camera ${name} connection: ${error.message}`, generation))
+      socket.on('close', () => this.handleStreamFailure(
+        `Camera ${name} connection closed`, generation))
     }
+  }
 
+  private startDecoder(generation: number): Promise<void> {
+    const decoder = spawn('ffmpeg', [
+      '-hide_banner', '-loglevel', 'warning', '-flags', 'low_delay',
+      '-analyzeduration', '0', '-probesize', '32768',
+      '-f', 'hevc', '-framerate', '25', '-i', 'pipe:0', '-an',
+      '-c:v', 'mjpeg', '-q:v', '4', '-f', 'image2pipe', 'pipe:1'
+    ], { stdio: ['pipe', 'pipe', 'pipe'] })
+    this.decoder = decoder
+    decoder.stdout.on('data', chunk => {
+      if (this.running && generation === this.connectionGeneration) {
+        this.consumeJpegChunk(Buffer.from(chunk), generation)
+      }
+    })
+    decoder.stderr.on('data', chunk => {
+      this.decoderError = `${this.decoderError}${String(chunk)}`.slice(-2_000)
+    })
+    decoder.stdin.on('error', error => {
+      this.handleStreamFailure(`Camera decoder input: ${error.message}`, generation)
+    })
+    decoder.on('exit', (code, signal) => {
+      if (!this.running || generation !== this.connectionGeneration) return
+      const detail = this.decoderError.trim().split('\n').at(-1)
+      this.handleStreamFailure(
+        `Camera decoder exited (${signal ?? code ?? 'unknown'})${detail ? `: ${detail}` : ''}`,
+        generation)
+    })
+    return new Promise((resolve, reject) => {
+      decoder.once('spawn', resolve)
+      decoder.once('error', error => reject(new Error(`Could not start ffmpeg: ${error.message}`)))
+    })
+  }
+
+  private sendRealplayRequest(): void {
+    const resolution = WIFI_CAMERA_RESOLUTIONS.find(item => item.value === this.options.frameSize) ??
+      WIFI_CAMERA_RESOLUTIONS.find(item => item.value === 8)!
+    this.sendControlRequest('realplay', {
+      channel: 0, stream: 0, HOR_RES: resolution.width, VER_RES: resolution.height, id: 1
+    })
+  }
+
+  private sendControlRequest(op: string, param: Record<string, unknown>): void {
+    if (!this.controlSocket || this.controlSocket.destroyed) return
+    const payload = Buffer.from(JSON.stringify({ version: '1.0', type: 'request', op, param }))
+    const frame = Buffer.allocUnsafe(XMIP_HEADER_SIZE + payload.length)
+    XMIP_MAGIC.copy(frame)
+    frame[4] = 0
+    frame.writeUInt32LE(payload.length, 5)
+    payload.copy(frame, XMIP_HEADER_SIZE)
+    this.controlSocket.write(frame)
+  }
+
+  private consumeXmipChunk(kind: 'control' | 'media', chunk: Buffer, generation: number): void {
+    let buffer = Buffer.concat([kind === 'control' ? this.controlBuffer : this.mediaBuffer, chunk])
+    while (buffer.length >= XMIP_HEADER_SIZE) {
+      if (!buffer.subarray(0, 4).equals(XMIP_MAGIC)) {
+        const next = buffer.indexOf(XMIP_MAGIC, 1)
+        if (next < 0) {
+          buffer = buffer.subarray(Math.max(0, buffer.length - 3))
+          break
+        }
+        buffer = buffer.subarray(next)
+        continue
+      }
+      const type = buffer[4]
+      const payloadLength = buffer.readUInt32LE(5)
+      if (payloadLength > MAX_PAYLOAD_SIZE) {
+        this.handleStreamFailure('Camera sent an oversized XMIP frame', generation)
+        return
+      }
+      const frameLength = XMIP_HEADER_SIZE + payloadLength
+      if (buffer.length < frameLength) break
+      const payload = buffer.subarray(XMIP_HEADER_SIZE, frameLength)
+      buffer = buffer.subarray(frameLength)
+      if (kind === 'control' && type === 0) this.consumeControlPayload(payload)
+      if (kind === 'media' && type === 1) this.consumeMediaPayload(payload)
+    }
+    if (kind === 'control') this.controlBuffer = buffer
+    else this.mediaBuffer = buffer
+  }
+
+  private consumeControlPayload(payload: Buffer): void {
     try {
-      await this.applyCameraSettings(normalized)
-      if (this.running) {
-        const message = imageTuningChanged
-          ? `Camera tuned to ${frameSizeLabel(normalized.frameSize)}`
-          : mirrorChanged
-            ? `Camera mirror ${normalized.horizontalFlip ? 'enabled' : 'disabled'}`
-            : 'Camera settings updated'
-        this.sendStatus('streaming', message)
+      const message = JSON.parse(payload.toString('utf8')) as {
+        type?: string
+        op?: string
+        param?: { width?: number; height?: number; fps?: number; video_codec?: string }
       }
-      return { ok: true }
+      if (message.type !== 'response' || message.op !== 'realplay') return
+      if (message.param?.video_codec && message.param.video_codec.toLowerCase() !== 'h265') {
+        throw new Error(`Unsupported camera codec ${message.param.video_codec}`)
+      }
+      const width = message.param?.width ?? 640
+      const height = message.param?.height ?? 480
+      const fps = message.param?.fps ?? 25
+      this.sendStatus('connecting', `E-Eye negotiated ${width}×${height} H.265 at ${fps} FPS…`)
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      this.sendStatus('error', message)
-      return { ok: false, error: message }
+      console.warn('[WifiCamera] Ignoring invalid XMIP control response', error)
     }
   }
 
-  stop(): void {
-    this.running = false
-    this.clearReconnectTimer()
-    this.stopDiagnostics()
-    this.closeTransport()
-    this.sendStatus('stopped', 'XIAO camera stopped')
+  private consumeMediaPayload(payload: Buffer): void {
+    let offset = 0
+    while (offset + 4 <= payload.length) {
+      if (payload[offset] !== 0 || payload[offset + 1] !== 0 || payload[offset + 2] !== 1) return
+      const packetType = payload[offset + 3]
+      const headerSize = packetType === 0xfd ? 20 : 14
+      const sizeOffset = packetType === 0xfd ? 16 : packetType === 0xfc ? 10 : 12
+      if (offset + headerSize > payload.length) return
+      const dataLength = payload.readUInt16LE(offset + sizeOffset)
+      const packetEnd = offset + headerSize + dataLength
+      if (packetEnd > payload.length) return
+      if (packetType === 0xfc || packetType === 0xfd) {
+        const sequence = payload[offset + (packetType === 0xfd ? 5 : 4)]
+        this.consumeVideoPacket(
+          payload.subarray(offset + headerSize, packetEnd), sequence, packetType === 0xfd)
+      }
+      offset = packetEnd
+    }
   }
 
-  acknowledgeFrame(): void {
-    this.rendererBusy = false
-    if (!this.running || !this.pendingFrame) return
+  private consumeVideoPacket(accessUnit: Buffer, sequence: number, isKeyframe: boolean): void {
+    if (this.expectedSequence != null && sequence !== this.expectedSequence && !isKeyframe) {
+      this.awaitingKeyframe = true
+      this.sendControlRequest('forceIFrame', { channel: 0, stream: 0 })
+    }
+    this.expectedSequence = (sequence + 1) & 0xff
+    if (isKeyframe) this.awaitingKeyframe = false
+    if (this.awaitingKeyframe || this.decoderBackpressured || accessUnit.length === 0) return
+    if (!this.decoder || this.decoder.stdin.destroyed) return
+    this.reportBytes += accessUnit.length
+    if (!this.decoder.stdin.write(accessUnit)) {
+      this.decoderBackpressured = true
+      this.awaitingKeyframe = true
+      this.decoder.stdin.once('drain', () => {
+        this.decoderBackpressured = false
+        this.sendControlRequest('forceIFrame', { channel: 0, stream: 0 })
+      })
+    }
+  }
 
-    const next = this.pendingFrame
-    this.pendingFrame = null
-    this.deliverFrame(next)
+  private consumeJpegChunk(chunk: Buffer, generation: number): void {
+    this.jpegBuffer = Buffer.concat([this.jpegBuffer, chunk])
+    while (this.jpegBuffer.length > 0) {
+      const start = this.jpegBuffer.indexOf(JPEG_START)
+      if (start < 0) {
+        this.jpegBuffer = this.jpegBuffer.at(-1) === 0xff
+          ? this.jpegBuffer.subarray(-1) : Buffer.alloc(0)
+        return
+      }
+      if (start > 0) this.jpegBuffer = this.jpegBuffer.subarray(start)
+      const end = this.jpegBuffer.indexOf(JPEG_END, 2)
+      if (end < 0) {
+        if (this.jpegBuffer.length > MAX_PAYLOAD_SIZE) {
+          this.handleStreamFailure('Decoded camera JPEG exceeded the maximum frame size', generation)
+        }
+        return
+      }
+      const frameEnd = end + JPEG_END.length
+      const frame = Buffer.from(this.jpegBuffer.subarray(0, frameEnd))
+      this.jpegBuffer = this.jpegBuffer.subarray(frameEnd)
+      this.queueFrame(frame)
+      if (!this.receivedFrame) {
+        this.receivedFrame = true
+        this.sendStatus('streaming', `E-Eye camera streaming at ${frameSizeLabel(this.options.frameSize)}`)
+      }
+    }
   }
 
   private closeTransport(): void {
     this.connectionGeneration += 1
-    this.streamRequest?.destroy()
-    this.streamResponse?.destroy()
-    this.streamRequest = null
-    this.streamResponse = null
-    this.streamBuffer = Buffer.alloc(0)
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer)
+    this.heartbeatTimer = null
+    this.controlSocket?.destroy()
+    this.mediaSocket?.destroy()
+    this.controlSocket = null
+    this.mediaSocket = null
+    this.decoder?.stdin.destroy()
+    this.decoder?.kill('SIGTERM')
+    this.decoder = null
+    this.controlBuffer = Buffer.alloc(0)
+    this.mediaBuffer = Buffer.alloc(0)
+    this.jpegBuffer = Buffer.alloc(0)
+    this.decoderError = ''
+    this.decoderBackpressured = false
+    this.awaitingKeyframe = true
+    this.expectedSequence = null
     this.rendererBusy = false
     this.pendingFrame = null
     this.receivedFrame = false
-  }
-
-  private scheduleReconnect(reason: string): void {
-    if (!this.running || this.reconnectTimer) return
-
-    this.reconnectCount += 1
-    this.sendStatus('connecting', `${reason}. Reconnecting…`)
-    this.sendDiagnostics()
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null
-      if (!this.running) return
-      this.starting = this.connectStream(true).finally(() => {
-        this.starting = null
-      })
-    }, RECONNECT_DELAY_MS)
-  }
-
-  private clearReconnectTimer(): void {
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
-    this.reconnectTimer = null
-  }
-
-  private async applyCameraSettings(options: WifiCameraOptions): Promise<void> {
-    await requestControl(options.host, 'framesize', options.frameSize)
-    await requestControl(options.host, 'quality', options.jpegQuality)
-    await requestControl(options.host, 'hmirror', options.horizontalFlip ? 1 : 0)
-  }
-
-  private openStream(generation: number): Promise<void> {
-    return new Promise((resolve, reject) => {
-      let opened = false
-      const request = http.get(
-        {
-          hostname: this.options.host,
-          port: STREAM_PORT,
-          path: '/stream',
-          headers: { Accept: 'multipart/x-mixed-replace' }
-        },
-        (response) => {
-          if (!this.running || generation !== this.connectionGeneration) {
-            response.destroy()
-            reject(new Error('Camera start cancelled'))
-            return
-          }
-          if (response.statusCode !== 200) {
-            response.resume()
-            reject(new Error(`Camera stream returned HTTP ${response.statusCode ?? 'unknown'}`))
-            return
-          }
-
-          opened = true
-          this.streamResponse = response
-          response.on('data', (chunk) => {
-            if (this.running && generation === this.connectionGeneration) {
-              this.consumeStreamChunk(Buffer.from(chunk), generation)
-            }
-          })
-          response.on('aborted', () => {
-            this.handleStreamFailure('Camera stream was interrupted', generation)
-          })
-          response.on('error', (error) => {
-            this.handleStreamFailure(`Camera stream: ${error.message}`, generation)
-          })
-          response.on('close', () => {
-            this.handleStreamFailure('Camera stream connection closed', generation)
-          })
-          resolve()
-        }
-      )
-
-      this.streamRequest = request
-      request.setTimeout(8_000, () => request.destroy(new Error('Camera connection timed out')))
-      request.once('error', (error) => {
-        if (!this.running || generation !== this.connectionGeneration) {
-          reject(new Error('Camera start cancelled'))
-        } else if (!opened) {
-          reject(new Error(`Camera connection: ${error.message}`))
-        } else {
-          this.handleStreamFailure(`Camera connection: ${error.message}`, generation)
-        }
-      })
-    })
-  }
-
-  private consumeStreamChunk(chunk: Buffer, generation: number): void {
-    this.streamBuffer = Buffer.concat([this.streamBuffer, chunk])
-
-    while (this.streamBuffer.length > 0) {
-      const start = this.streamBuffer.indexOf(JPEG_START)
-      if (start < 0) {
-        this.streamBuffer = this.streamBuffer.at(-1) === 0xff
-          ? this.streamBuffer.subarray(-1)
-          : Buffer.alloc(0)
-        return
-      }
-
-      if (start > 0) this.streamBuffer = this.streamBuffer.subarray(start)
-      const end = this.streamBuffer.indexOf(JPEG_END, JPEG_START.length)
-      if (end < 0) {
-        if (this.streamBuffer.length > MAX_FRAME_SIZE) {
-          this.handleStreamFailure('Camera JPEG exceeded the maximum frame size', generation)
-        }
-        return
-      }
-
-      const frameEnd = end + JPEG_END.length
-      const frame = Buffer.from(this.streamBuffer.subarray(0, frameEnd))
-      this.streamBuffer = this.streamBuffer.subarray(frameEnd)
-      this.queueFrame(frame)
-
-      if (!this.receivedFrame) {
-        this.receivedFrame = true
-        this.sendStatus('streaming', `XIAO camera streaming at ${frameSizeLabel(this.options.frameSize)}`)
-      }
-    }
   }
 
   private handleStreamFailure(message: string, generation: number): void {
@@ -337,13 +399,28 @@ export class WifiCameraService {
     this.scheduleReconnect(message)
   }
 
+  private scheduleReconnect(reason: string): void {
+    if (!this.running || this.reconnectTimer) return
+    this.reconnectCount += 1
+    this.sendStatus('connecting', `${reason}. Reconnecting…`)
+    this.sendDiagnostics()
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      if (!this.running) return
+      this.starting = this.connectStream(true).finally(() => { this.starting = null })
+    }, RECONNECT_DELAY_MS)
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
+    this.reconnectTimer = null
+  }
+
   private queueFrame(frame: Buffer): void {
     this.lastFrameAt = Date.now()
     this.lastFrameSize = frame.length
     this.receivedFrames += 1
     this.reportFrames += 1
-    this.reportBytes += frame.length
-
     if (this.rendererBusy) {
       if (this.pendingFrame) this.replacedFrames += 1
       this.pendingFrame = frame
@@ -378,9 +455,7 @@ export class WifiCameraService {
 
   private startDiagnostics(): void {
     this.stopDiagnostics()
-    this.diagnosticsTimer = setInterval(() => {
-      void this.updateDiagnostics()
-    }, DIAGNOSTICS_INTERVAL_MS)
+    this.diagnosticsTimer = setInterval(() => { void this.updateDiagnostics() }, DIAGNOSTICS_INTERVAL_MS)
     void this.updateDiagnostics()
   }
 
@@ -397,30 +472,20 @@ export class WifiCameraService {
     this.reportFrames = 0
     this.reportBytes = 0
     this.reportStartedAt = now
-
     const frameReference = this.lastFrameAt || this.connectionStartedAt
-    if (
-      this.running &&
-      !this.reconnectTimer &&
-      frameReference > 0 &&
-      now - frameReference > STALE_STREAM_MS
-    ) {
+    if (this.running && !this.reconnectTimer && frameReference > 0 && now - frameReference > STALE_STREAM_MS) {
       this.handleStreamFailure('Camera stream stalled', this.connectionGeneration)
     }
-
     if (!this.diagnosticsBusy) {
       this.diagnosticsBusy = true
-      try {
-        this.wifiMetrics = await readWifiLink(this.options.host)
-      } finally {
-        this.diagnosticsBusy = false
-      }
+      try { this.wifiMetrics = await readWifiLink(this.options.host) }
+      finally { this.diagnosticsBusy = false }
     }
     this.sendDiagnostics()
   }
 
   private sendDiagnostics(): void {
-    const diagnostics: WifiCameraDiagnostics = {
+    this.events.send('wifi-camera-diagnostics', {
       state: this.state,
       fps: this.currentFps,
       bitrateKbps: this.currentBitrateKbps,
@@ -430,38 +495,33 @@ export class WifiCameraService {
       replacedFrames: this.replacedFrames,
       reconnectCount: this.reconnectCount,
       ...this.wifiMetrics
-    }
-    this.events.send('wifi-camera-diagnostics', diagnostics)
+    } satisfies WifiCameraDiagnostics)
   }
 }
 
-function requestControl(host: string, variable: string, value: number): Promise<void> {
+function openSocket(host: string, port: number): Promise<Socket> {
   return new Promise((resolve, reject) => {
-    const request = http.get(
-      {
-        hostname: host,
-        port: CONTROL_PORT,
-        path: `/control?var=${encodeURIComponent(variable)}&val=${encodeURIComponent(value)}`
-      },
-      response => {
-        response.resume()
-        if (response.statusCode === 200) resolve()
-        else reject(new Error(`Camera ${variable} control returned HTTP ${response.statusCode ?? 'unknown'}`))
-      }
-    )
-    request.setTimeout(5_000, () => request.destroy(new Error('Camera control timed out')))
-    request.once('error', error => reject(new Error(`Camera control: ${error.message}`)))
+    const socket = new Socket()
+    const onError = (error: Error): void => {
+      socket.destroy()
+      reject(new Error(`Camera port ${port}: ${error.message}`))
+    }
+    socket.setTimeout(8_000, () => socket.destroy(new Error('connection timed out')))
+    socket.once('error', onError)
+    socket.connect(port, host, () => {
+      socket.setTimeout(0)
+      socket.off('error', onError)
+      resolve(socket)
+    })
   })
 }
 
 async function readWifiLink(host: string): Promise<WifiLinkMetrics> {
   if (process.platform !== 'linux') return {}
-
   try {
     const route = await runCommand('ip', ['route', 'get', host])
     const interfaceName = route.match(/\bdev\s+(\S+)/)?.[1]
     if (!interfaceName) return {}
-
     const metrics: WifiLinkMetrics = { interface: interfaceName }
     try {
       const link = await runCommand('iw', ['dev', interfaceName, 'link'])
@@ -469,37 +529,25 @@ async function readWifiLink(host: string): Promise<WifiLinkMetrics> {
       metrics.signalDbm = parseOptionalNumber(link.match(/^\s*signal:\s*(-?[\d.]+)\s*dBm/m)?.[1])
       metrics.rxBitrateMbps = parseOptionalNumber(link.match(/^\s*rx bitrate:\s*([\d.]+)/m)?.[1])
       metrics.txBitrateMbps = parseOptionalNumber(link.match(/^\s*tx bitrate:\s*([\d.]+)/m)?.[1])
-
       const frequencyMhz = parseOptionalNumber(link.match(/^\s*freq:\s*(\d+)/m)?.[1])
       try {
-        const survey = await runCommand('iw', ['dev', interfaceName, 'survey', 'dump'])
-        metrics.noiseDbm = parseSurveyNoise(survey, frequencyMhz)
-      } catch {
-        // Survey noise is optional and is not exposed by every wireless driver.
-      }
-    } catch {
-      // Keep the route interface even when the wireless driver omits link data.
-    }
-
+        metrics.noiseDbm = parseSurveyNoise(
+          await runCommand('iw', ['dev', interfaceName, 'survey', 'dump']), frequencyMhz)
+      } catch { /* Not exposed by every wireless driver. */ }
+    } catch { /* Keep the route interface when link details are unavailable. */ }
     try {
-      const powerSave = await runCommand('iw', ['dev', interfaceName, 'get', 'power_save'])
-      metrics.powerSave = /Power save:\s*on/i.test(powerSave)
-    } catch {
-      // Power-save reporting is not supported by every wireless driver.
-    }
+      metrics.powerSave = /Power save:\s*on/i.test(
+        await runCommand('iw', ['dev', interfaceName, 'get', 'power_save']))
+    } catch { /* Not supported by every wireless driver. */ }
     return metrics
-  } catch {
-    return {}
-  }
+  } catch { return {} }
 }
 
 function runCommand(command: string, args: string[]): Promise<string> {
   return execFileAsync(command, args, {
-    encoding: 'utf8',
-    timeout: 2_000,
-    maxBuffer: 64 * 1024,
+    encoding: 'utf8', timeout: 2_000, maxBuffer: 64 * 1024,
     env: { ...process.env, LC_ALL: 'C' }
-  }).then((result) => String(result.stdout))
+  }).then(result => String(result.stdout))
 }
 
 function parseOptionalNumber(value: string | undefined): number | undefined {
@@ -510,21 +558,18 @@ function parseOptionalNumber(value: string | undefined): number | undefined {
 
 function parseSurveyNoise(survey: string, frequencyMhz: number | undefined): number | undefined {
   const sections = survey.split(/(?=^\s*frequency:)/m)
-  const activeSection = sections.find(section => {
-    if (frequencyMhz != null) {
-      const sectionFrequency = parseOptionalNumber(section.match(/^\s*frequency:\s*(\d+)/m)?.[1])
-      return sectionFrequency === frequencyMhz
-    }
-    return /\[in use\]/i.test(section)
-  })
-
-  return parseOptionalNumber(activeSection?.match(/^\s*noise:\s*(-?[\d.]+)\s*dBm/m)?.[1])
+  const active = sections.find(section => frequencyMhz != null
+    ? parseOptionalNumber(section.match(/^\s*frequency:\s*(\d+)/m)?.[1]) === frequencyMhz
+    : /\[in use\]/i.test(section))
+  return parseOptionalNumber(active?.match(/^\s*noise:\s*(-?[\d.]+)\s*dBm/m)?.[1])
 }
 
 function normalizeOptions(options: Partial<WifiCameraOptions> | null | undefined): WifiCameraOptions {
   return {
     host: normalizeHost(options?.host),
     frameSize: normalizeFrameSize(options?.frameSize),
+    // Retained for backwards-compatible saved config; E-Eye sends H.265 and
+    // does not expose the old ESP32 JPEG-quality or mirror controls.
     jpegQuality: normalizeJpegQuality(options?.jpegQuality),
     horizontalFlip: options?.horizontalFlip === true
   }
@@ -533,32 +578,23 @@ function normalizeOptions(options: Partial<WifiCameraOptions> | null | undefined
 function normalizeHost(value: unknown): string {
   const candidate = String(value ?? '').trim()
   if (!candidate) return DEFAULT_OPTIONS.host
-
   try {
-    const url = new URL(candidate.includes('://') ? candidate : `http://${candidate}`)
-    return url.hostname || DEFAULT_OPTIONS.host
-  } catch {
-    return DEFAULT_OPTIONS.host
-  }
+    return new URL(candidate.includes('://') ? candidate : `http://${candidate}`).hostname ||
+      DEFAULT_OPTIONS.host
+  } catch { return DEFAULT_OPTIONS.host }
 }
 
 function normalizeFrameSize(value: unknown): WifiCameraFrameSize {
   const frameSize = Number(value)
-  return SUPPORTED_FRAME_SIZES.has(frameSize) ? frameSize as WifiCameraFrameSize : DEFAULT_OPTIONS.frameSize
+  return SUPPORTED_FRAME_SIZES.has(frameSize)
+    ? frameSize as WifiCameraFrameSize : DEFAULT_OPTIONS.frameSize
 }
 
 function normalizeJpegQuality(value: unknown): number {
   const quality = Math.round(Number(value))
-  if (!Number.isFinite(quality)) return DEFAULT_OPTIONS.jpegQuality
-  return Math.min(63, Math.max(4, quality))
+  return Number.isFinite(quality) ? Math.min(63, Math.max(4, quality)) : DEFAULT_OPTIONS.jpegQuality
 }
 
 function frameSizeLabel(frameSize: WifiCameraFrameSize): string {
-  switch (frameSize) {
-    case 11: return '1280×720'
-    case 10: return '1024×768'
-    case 9: return '800×600'
-    case 8: return '640×480'
-    case 5: return '320×240'
-  }
+  return WIFI_CAMERA_RESOLUTIONS.find(item => item.value === frameSize)?.label ?? 'VGA 640×480'
 }

@@ -31,6 +31,7 @@ command -v cage >/dev/null 2>&1 || missing_packages+=(cage)
 command -v curl >/dev/null 2>&1 || missing_packages+=(curl)
 command -v node >/dev/null 2>&1 || missing_packages+=(nodejs)
 command -v npm >/dev/null 2>&1 || missing_packages+=(npm)
+command -v ffmpeg >/dev/null 2>&1 || missing_packages+=(ffmpeg)
 if test -z "$CHROMIUM"; then missing_packages+=(chromium); fi
 
 if test "${#missing_packages[@]}" -gt 0; then
@@ -60,11 +61,11 @@ ROUND_CARPLAY_RELEASE_ROOT="$RELEASE_ROOT" npm run install:browser-release
 
 sudo install -d -m 0755 "$CONFIG_DIR"
 printf '%s\n' "$USER_HOME" | sudo tee "$CONFIG_DIR/install-user-home" >/dev/null
-CAMERA_PASSWORD_FILE="$CONFIG_DIR/camera-wifi-password"
+CAMERA_PASSWORD_FILE="$CONFIG_DIR/eeye-camera-wifi-password"
 if ! sudo test -s "$CAMERA_PASSWORD_FILE"; then
   camera_password="${ROUND_CARPLAY_CAMERA_WIFI_PASSWORD:-}"
   if test -z "$camera_password" && test -t 0; then
-    read -r -s -p "XIAO camera Wi-Fi password: " camera_password
+    read -r -s -p "E-Eye camera Wi-Fi password: " camera_password
     echo
   fi
   if test -z "$camera_password"; then

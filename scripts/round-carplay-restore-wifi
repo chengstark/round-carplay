@@ -6,7 +6,7 @@ test "$(id -u)" -eq 0 || {
   exit 77
 }
 
-PROFILE=xiao-camera
+PROFILE=eeye-camera
 INTERFACE=wlan0
 PREVIOUS_WIFI_FILE=/run/round-carplay/previous-wifi-uuid
 

@@ -61,8 +61,8 @@ function normalizeConfig(value: Partial<ExtraConfig>): ExtraConfig {
     camera: '',
     backgroundColor: '#000000',
     wifiCameraRotation: 0,
-    wifiCameraHost: '192.168.4.1',
-    wifiCameraFrameSize: 11,
+    wifiCameraHost: '192.168.10.1',
+    wifiCameraFrameSize: 8,
     wifiCameraJpegQuality: 20,
     wifiCameraHorizontalFlip: false,
     gpsSmoothing: 0.55,
@@ -85,6 +85,11 @@ function normalizeConfig(value: Partial<ExtraConfig>): ExtraConfig {
   merged.wifiCameraRotation = ((finiteNumber(merged.wifiCameraRotation, 0) % 360) + 360) % 360
   merged.wifiCameraHost = normalizeHost(merged.wifiCameraHost)
   merged.wifiCameraFrameSize = normalizeFrameSize(merged.wifiCameraFrameSize)
+  // Migrate the former XIAO defaults without requiring a config reset.
+  if (merged.wifiCameraHost === '192.168.4.1') {
+    merged.wifiCameraHost = '192.168.10.1'
+    if (merged.wifiCameraFrameSize === 11) merged.wifiCameraFrameSize = 8
+  }
   merged.wifiCameraJpegQuality = Math.min(
     63,
     Math.max(4, Math.round(finiteNumber(merged.wifiCameraJpegQuality, 20)))
@@ -107,15 +112,15 @@ function normalizeOutputGain(value: unknown): number {
 
 function normalizeHost(value: unknown): string {
   const candidate = String(value ?? '').trim()
-  if (!candidate) return '192.168.4.1'
+  if (!candidate) return '192.168.10.1'
   try {
     return new URL(candidate.includes('://') ? candidate : `http://${candidate}`).hostname
   } catch {
-    return '192.168.4.1'
+    return '192.168.10.1'
   }
 }
 
 function normalizeFrameSize(value: unknown): WifiCameraFrameSize {
   const frameSize = Number(value)
-  return [5, 8, 9, 10, 11].includes(frameSize) ? (frameSize as WifiCameraFrameSize) : 11
+  return [5, 8, 9, 10, 11].includes(frameSize) ? (frameSize as WifiCameraFrameSize) : 8
 }

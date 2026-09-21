@@ -20,7 +20,7 @@ export type ExtraConfig = DongleConfig & {
 /** Clockwise camera rotation in degrees, normalized to the range 0–359. */
 export type WifiCameraRotation = number
 
-/** ESP32 camera frame-size values accepted by the XIAO `/control` endpoint. */
+/** Resolution selector values mapped to the E-Eye realplay request dimensions. */
 export type WifiCameraFrameSize = 5 | 8 | 9 | 10 | 11
 
 export const WIFI_CAMERA_RESOLUTIONS: ReadonlyArray<{

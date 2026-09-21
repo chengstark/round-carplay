@@ -89,7 +89,7 @@ throughout the experiment.
 - Main-process services currently handle:
   - Carlinkit USB and CarPlay transport
   - CarPlay audio/video/event delivery
-  - XIAO Wi-Fi camera streaming and diagnostics
+  - E-Eye XMIP/H.265 Wi-Fi camera streaming and diagnostics
   - GPS state
   - NetworkManager Wi-Fi management
   - Settings persistence
@@ -201,7 +201,7 @@ renderer instead of invoking Electron packaging. The backend should serve a
 fixed local fallback page if no valid UI bundle is available.
 
 Updates requiring internet access must account for the Pi being connected to
-the XIAO hotspot, which has no internet route. Do not interrupt an active backup
+the E-Eye hotspot, which has no internet route. Do not interrupt an active backup
 camera session to fetch an update.
 
 ## Migration phases
@@ -282,7 +282,7 @@ under the actual Cage/PAM session.
 
 ### Wi-Fi transitions
 
-The camera button currently repairs and activates the `xiao-camera`
+The camera button repairs and activates the `eeye-camera`
 NetworkManager profile. Because the backend and browser communicate over
 loopback, switching away from an internet Wi-Fi network must not break the UI.
 
@@ -304,16 +304,16 @@ following are true:
 - The 480-pixel round interface is visually equivalent to the current release.
 - The Pi boots directly into the UI without a desktop, browser chrome, dialogs,
   or keyboard interaction.
-- Boot works with no internet and with the XIAO hotspot absent.
+- Boot works with no internet and with the E-Eye hotspot absent.
 - CarPlay connects, renders, accepts touch/key input, and plays audio reliably.
 - Microphone input remains functional.
 - USB disconnect/reconnect and forced reset behavior match the current app.
 - GPS state and smoothing match the current app.
 - Wi-Fi scanning and connection management work.
-- Opening the camera activates `xiao-camera`, disables Wi-Fi power saving, and
-  displays live diagnostics even without complete JPEG frames.
-- Camera FPS, latency, reconnection, rotation, mirroring, and tuning match the
-  current app.
+- Opening the camera activates `eeye-camera`, disables Wi-Fi power saving, and
+  displays live diagnostics while the XMIP/H.265 stream connects.
+- Camera FPS, latency, reconnection, rotation, and resolution selection match
+  the current app.
 - Reboot, power-off, update status, and recovery operations work without a
   desktop shell.
 - Chromium and backend crashes recover automatically.

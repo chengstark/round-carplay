@@ -6,10 +6,10 @@ test "$(id -u)" -eq 0 || {
   exit 77
 }
 
-PROFILE=xiao-camera
+PROFILE=eeye-camera
 INTERFACE=wlan0
-SSID=XIAO_ESP32S3_Sense
-PASSWORD_FILE=/etc/round-carplay/camera-wifi-password
+SSID=backupcam_aee782870
+PASSWORD_FILE=/etc/round-carplay/eeye-camera-wifi-password
 PREVIOUS_WIFI_FILE=/run/round-carplay/previous-wifi-uuid
 
 ACTIVE_PROFILE="$(nmcli -g GENERAL.CONNECTION device show "$INTERFACE" 2>/dev/null || true)"
@@ -47,7 +47,6 @@ fi
 nmcli connection modify "$PROFILE" \
   802-11-wireless.ssid "$SSID" \
   802-11-wireless.band bg \
-  802-11-wireless.channel 6 \
   802-11-wireless.powersave 2 \
   802-11-wireless-security.key-mgmt wpa-psk \
   802-11-wireless-security.psk-flags 0 \
