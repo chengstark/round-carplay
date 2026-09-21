@@ -32,6 +32,7 @@ command -v curl >/dev/null 2>&1 || missing_packages+=(curl)
 command -v node >/dev/null 2>&1 || missing_packages+=(nodejs)
 command -v npm >/dev/null 2>&1 || missing_packages+=(npm)
 command -v ffmpeg >/dev/null 2>&1 || missing_packages+=(ffmpeg)
+command -v bluetoothctl >/dev/null 2>&1 || missing_packages+=(bluez)
 if test -z "$CHROMIUM"; then missing_packages+=(chromium); fi
 
 if test "${#missing_packages[@]}" -gt 0; then
@@ -86,6 +87,8 @@ sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-camera-wifi" /usr/local/
 sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-connect-wifi" /usr/local/sbin/round-carplay-connect-wifi
 sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-restore-wifi" /usr/local/sbin/round-carplay-restore-wifi
 sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-scan-wifi" /usr/local/sbin/round-carplay-scan-wifi
+sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-bluetooth" /usr/local/sbin/round-carplay-bluetooth
+sudo systemctl enable --now bluetooth.service
 
 CURSOR_THEME_NAME=round-carplay-transparent
 CURSOR_THEME_ROOT="/usr/local/share/icons/$CURSOR_THEME_NAME"
@@ -253,6 +256,7 @@ $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-camera-wifi
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-connect-wifi
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-restore-wifi
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-scan-wifi
+$INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-bluetooth *
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/systemctl reboot
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff
 EOF

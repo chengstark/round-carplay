@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
 import { ExtraConfig } from '../main/Globals'
 import type { GpsState } from '../main/gps/GpsService'
+import type { BluetoothActionResult, BluetoothSnapshot } from '../main/bluetooth/BluetoothService'
 import type {
   IpAddress,
   NetworkSnapshot,
@@ -131,6 +132,14 @@ export const api: CarplayApi = {
     connectWifi: (ssid: string, password: string): Promise<WifiConnectResult> =>
       ipcRenderer.invoke('network-connect-wifi', ssid, password),
     getIpAddresses: (): Promise<IpAddress[]> => ipcRenderer.invoke('network-get-ip-addresses')
+  },
+
+  bluetooth: {
+    scan: (): Promise<BluetoothSnapshot> => ipcRenderer.invoke('bluetooth-scan'),
+    connect: (address: string): Promise<BluetoothActionResult> =>
+      ipcRenderer.invoke('bluetooth-connect', address),
+    disconnect: (address: string): Promise<BluetoothActionResult> =>
+      ipcRenderer.invoke('bluetooth-disconnect', address)
   },
 
   update: {

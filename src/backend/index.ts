@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { extname, join, normalize, resolve, sep } from 'node:path'
 import { Server, type Socket } from 'socket.io'
 import { CarplayService } from '../main/carplay/CarplayService'
+import { BluetoothService } from '../main/bluetooth/BluetoothService'
 import type { WifiCameraOptions } from '../main/Globals'
 import type { ServiceEventSink } from '../main/events/ServiceEventSink'
 import { GpsService } from '../main/gps/GpsService'
@@ -53,6 +54,7 @@ const usb = new USBService(carplay, socketEvents)
 const wifiCamera = new WifiCameraService(socketEvents)
 const gps = new GpsService(undefined, socketEvents)
 const network = new NetworkService()
+const bluetooth = new BluetoothService()
 const power = new SystemUpdateService()
 const updater = new BrowserUpdateService()
 const otaUpdater = new OtaUpdateService(() => wifiCamera.isActive())
@@ -140,6 +142,12 @@ async function handleRpc(socket: Socket, request: RpcRequest): Promise<unknown> 
       return network.connectWifi(requireString(args[0], 'SSID'), requireString(args[1], 'password'))
     case 'network.getIpAddresses':
       return network.getIpAddresses()
+    case 'bluetooth.scan':
+      return bluetooth.scan()
+    case 'bluetooth.connect':
+      return bluetooth.connect(requireString(args[0], 'Bluetooth address'))
+    case 'bluetooth.disconnect':
+      return bluetooth.disconnect(requireString(args[0], 'Bluetooth address'))
     case 'update.getStatus':
       return otaUpdater.isConfigured() ? otaUpdater.getStatus() : updater.getStatus()
     case 'update.start':

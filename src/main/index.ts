@@ -7,6 +7,7 @@ import { Socket } from './Socket'
 import { ExtraConfig, KeyBindings, WifiCameraFrameSize, WIFI_CAMERA_RESOLUTIONS } from './Globals'
 import { USBService } from './usb/USBService'
 import { CarplayService } from './carplay/CarplayService'
+import { BluetoothService } from './bluetooth/BluetoothService'
 import { WifiCameraService } from './wifi/WifiCameraService'
 import { GpsService } from './gps/GpsService'
 import { NetworkService } from './network/NetworkService'
@@ -106,6 +107,7 @@ const carplayService = new CarplayService(electronEvents, appPath)
 const wifiCameraService = new WifiCameraService(electronEvents)
 const gpsService = new GpsService(undefined, electronEvents)
 const networkService = new NetworkService()
+const bluetoothService = new BluetoothService()
 const systemUpdateService = new SystemUpdateService()
 const otaUpdateService = new OtaUpdateService(() => wifiCameraService.isActive())
 const runtimeSwitchService = new RuntimeSwitchService()
@@ -381,6 +383,11 @@ app.whenReady().then(() => {
     networkService.connectWifi(ssid, password)
   )
   ipcMain.handle('network-get-ip-addresses', () => networkService.getIpAddresses())
+  ipcMain.handle('bluetooth-scan', () => bluetoothService.scan())
+  ipcMain.handle('bluetooth-connect', (_event, address: string) => bluetoothService.connect(address))
+  ipcMain.handle('bluetooth-disconnect', (_event, address: string) =>
+    bluetoothService.disconnect(address)
+  )
   ipcMain.handle('system-update-get-status', () =>
     otaUpdateService.isConfigured() ? otaUpdateService.getStatus() : systemUpdateService.getStatus()
   )

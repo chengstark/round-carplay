@@ -27,6 +27,9 @@
 - Selecting `backcam_aee72870` in the ordinary Wi-Fi menu launches the same
   protected camera workflow as the dedicated camera control. It must not use
   the generic password connector or expose the root-only camera password.
+- The browser system menu includes Bluetooth discovery and pair/connect or
+  disconnect controls immediately below Wi-Fi. BlueZ mutations run through the
+  validated root helper `/usr/local/sbin/round-carplay-bluetooth`.
 
 The protocol analysis and standalone probe live in the sibling workspace at
 `/Users/starkguo/Documents/wifi_backup_cam`.

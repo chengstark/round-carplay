@@ -14,12 +14,14 @@ import {
   Typography
 } from '@mui/material'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import BluetoothIcon from '@mui/icons-material/Bluetooth'
 import CloseIcon from '@mui/icons-material/Close'
 import LockIcon from '@mui/icons-material/Lock'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt'
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz'
 import WifiIcon from '@mui/icons-material/Wifi'
+import type { BluetoothDevice } from '../../../main/bluetooth/BluetoothService'
 import type { IpAddress, WifiNetwork } from '../../../main/network/NetworkService'
 import type { RuntimeSwitchStatus } from '../../../main/runtime/RuntimeSwitchService'
 import type { SystemUpdateStatus } from '../../../main/update/SystemUpdateService'
@@ -55,6 +57,11 @@ export default function SystemMenu({
   const [scanning, setScanning] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [message, setMessage] = useState('')
+  const [bluetoothDevices, setBluetoothDevices] = useState<BluetoothDevice[]>([])
+  const [selectedBluetoothAddress, setSelectedBluetoothAddress] = useState<string | null>(null)
+  const [bluetoothScanning, setBluetoothScanning] = useState(false)
+  const [bluetoothBusy, setBluetoothBusy] = useState(false)
+  const [bluetoothMessage, setBluetoothMessage] = useState('')
   const [updateStatus, setUpdateStatus] = useState<SystemUpdateStatus>({
     state: 'idle',
     message: 'Check for application updates'
@@ -94,6 +101,19 @@ export default function SystemMenu({
     }
   }, [])
 
+  const refreshBluetooth = useCallback(async (): Promise<void> => {
+    setBluetoothScanning(true)
+    try {
+      const snapshot = await window.carplay.bluetooth.scan()
+      setBluetoothDevices(snapshot.devices)
+      setBluetoothMessage(snapshot.error ?? '')
+    } catch (error) {
+      setBluetoothMessage(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBluetoothScanning(false)
+    }
+  }, [])
+
   useEffect(() => {
     let active = true
 
@@ -121,6 +141,10 @@ export default function SystemMenu({
   useEffect(() => {
     refreshNetworks()
   }, [refreshNetworks])
+
+  useEffect(() => {
+    refreshBluetooth()
+  }, [refreshBluetooth])
 
   useEffect(() => {
     let active = true
@@ -174,6 +198,24 @@ export default function SystemMenu({
       setMessage(error instanceof Error ? error.message : String(error))
     } finally {
       setConnecting(false)
+    }
+  }
+
+  const toggleBluetooth = async (): Promise<void> => {
+    const device = bluetoothDevices.find((item) => item.address === selectedBluetoothAddress)
+    if (!device) return
+    setBluetoothBusy(true)
+    setBluetoothMessage(`${device.connected ? 'Disconnecting from' : 'Connecting to'} ${device.name}…`)
+    try {
+      const result = device.connected
+        ? await window.carplay.bluetooth.disconnect(device.address)
+        : await window.carplay.bluetooth.connect(device.address)
+      setBluetoothDevices(result.devices)
+      setBluetoothMessage(result.message)
+    } catch (error) {
+      setBluetoothMessage(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBluetoothBusy(false)
     }
   }
 
@@ -496,6 +538,119 @@ export default function SystemMenu({
           title={message}
         >
           {message}
+        </Typography>
+      )}
+
+      <Box sx={{ display: 'flex', alignItems: 'center', minHeight: 32, mt: 0.7 }}>
+        <BluetoothIcon fontSize="small" sx={{ mr: 0.7 }} />
+        <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
+          Bluetooth devices
+        </Typography>
+        <IconButton
+          aria-label="Refresh Bluetooth devices"
+          onClick={refreshBluetooth}
+          disabled={bluetoothScanning || bluetoothBusy}
+          size="small"
+          sx={{ color: '#fff' }}
+        >
+          {bluetoothScanning
+            ? <CircularProgress size={18} color="inherit" />
+            : <RefreshIcon fontSize="small" />}
+        </IconButton>
+      </Box>
+
+      <Box
+        sx={{
+          minHeight: 48,
+          maxHeight: 116,
+          flex: '0 0 auto',
+          overflowY: 'auto',
+          borderRadius: 1,
+          backgroundColor: 'rgba(255,255,255,0.055)'
+        }}
+      >
+        {!bluetoothScanning && bluetoothDevices.length === 0 && (
+          <Typography variant="caption" sx={{ display: 'block', p: 1.2, opacity: 0.7 }}>
+            No Bluetooth devices found
+          </Typography>
+        )}
+        {bluetoothDevices.map((device) => {
+          const selected = selectedBluetoothAddress === device.address
+          return (
+            <button
+              key={device.address}
+              type="button"
+              onClick={() => {
+                setSelectedBluetoothAddress(device.address)
+                setBluetoothMessage(device.connected ? `Connected to ${device.name}` : '')
+              }}
+              style={{
+                width: '100%',
+                minHeight: 38,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 7,
+                padding: '6px 9px',
+                border: 0,
+                borderBottom: '1px solid rgba(255,255,255,0.07)',
+                color: '#fff',
+                textAlign: 'left',
+                background: selected ? 'rgba(255,255,255,0.16)' : 'transparent'
+              }}
+            >
+              {device.connected
+                ? <CheckCircleIcon sx={{ fontSize: 17, color: '#69d58b' }} />
+                : <BluetoothIcon sx={{ fontSize: 17, opacity: 0.72 }} />}
+              <span
+                style={{
+                  flex: '1 1 auto',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  fontSize: 13
+                }}
+              >
+                {device.name}
+              </span>
+              <span style={{ fontSize: 10, opacity: 0.58 }}>
+                {device.connected ? 'Connected' : device.paired ? 'Paired' : 'New'}
+              </span>
+            </button>
+          )
+        })}
+      </Box>
+
+      {selectedBluetoothAddress && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, mt: 0.6 }}>
+          <Typography
+            variant="caption"
+            sx={{ flex: '1 1 auto', opacity: 0.68, overflow: 'hidden', textOverflow: 'ellipsis' }}
+          >
+            {selectedBluetoothAddress}
+          </Typography>
+          <Button
+            variant="contained"
+            size="small"
+            disabled={bluetoothBusy || bluetoothScanning}
+            onClick={toggleBluetooth}
+            sx={{ minWidth: 92, height: 32 }}
+          >
+            {bluetoothBusy
+              ? <CircularProgress size={16} color="inherit" />
+              : bluetoothDevices.find((item) => item.address === selectedBluetoothAddress)?.connected
+                ? 'Disconnect'
+                : 'Connect'}
+          </Button>
+        </Box>
+      )}
+
+      {bluetoothMessage && (
+        <Typography
+          variant="caption"
+          title={bluetoothMessage}
+          sx={{ mt: 0.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+        >
+          {bluetoothMessage}
         </Typography>
       )}
 

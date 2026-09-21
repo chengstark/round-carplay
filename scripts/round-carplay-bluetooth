@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+test "$(id -u)" -eq 0 || {
+  echo "Bluetooth control requires root" >&2
+  exit 77
+}
+
+COMMAND="${1:-}"
+ADDRESS="${2:-}"
+
+validate_address() {
+  [[ "$ADDRESS" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]] || {
+    echo "Invalid Bluetooth address" >&2
+    exit 64
+  }
+}
+
+prepare_controller() {
+  systemctl start bluetooth.service
+  if command -v rfkill >/dev/null 2>&1; then rfkill unblock bluetooth || true; fi
+  bluetoothctl show 2>/dev/null | grep -q '^Controller ' || {
+    echo "No Bluetooth controller is available" >&2
+    exit 1
+  }
+  bluetoothctl power on >/dev/null
+}
+
+case "$COMMAND" in
+  scan)
+    prepare_controller
+    bluetoothctl --timeout 8 scan on >/dev/null 2>&1 || true
+    bluetoothctl scan off >/dev/null 2>&1 || true
+    bluetoothctl devices
+    ;;
+  list)
+    prepare_controller
+    bluetoothctl devices
+    ;;
+  info)
+    validate_address
+    prepare_controller
+    bluetoothctl info "$ADDRESS"
+    ;;
+  connect)
+    validate_address
+    prepare_controller
+    OUTPUT="$(
+      {
+        printf 'agent NoInputNoOutput\n'
+        printf 'default-agent\n'
+        printf 'pair %s\n' "$ADDRESS"
+        printf 'trust %s\n' "$ADDRESS"
+        printf 'connect %s\n' "$ADDRESS"
+        printf 'quit\n'
+      } | bluetoothctl --timeout 45 2>&1
+    )" || true
+    if ! bluetoothctl info "$ADDRESS" | grep -q '^[[:space:]]*Connected: yes'; then
+      printf '%s\n' "$OUTPUT" >&2
+      echo "Bluetooth connection failed" >&2
+      exit 1
+    fi
+    ;;
+  disconnect)
+    validate_address
+    prepare_controller
+    bluetoothctl disconnect "$ADDRESS" >/dev/null
+    ;;
+  *)
+    echo "Usage: round-carplay-bluetooth {scan|list|info|connect|disconnect} [address]" >&2
+    exit 64
+    ;;
+esac

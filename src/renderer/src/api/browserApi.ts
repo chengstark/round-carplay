@@ -86,6 +86,11 @@ function installBrowserApi(): void {
         rpcWithTimeout(socket, 45_000, 'network.connectWifi', ssid, password),
       getIpAddresses: () => rpc(socket, 'network.getIpAddresses')
     },
+    bluetooth: {
+      scan: () => rpcWithTimeout(socket, 30_000, 'bluetooth.scan'),
+      connect: (address) => rpcWithTimeout(socket, 60_000, 'bluetooth.connect', address),
+      disconnect: (address) => rpcWithTimeout(socket, 30_000, 'bluetooth.disconnect', address)
+    },
     update: {
       getStatus: () => rpc(socket, 'update.getStatus'),
       start: () => rpcWithTimeout(socket, 15 * 60_000, 'update.start'),

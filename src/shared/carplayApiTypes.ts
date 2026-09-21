@@ -1,5 +1,9 @@
 import type { ExtraConfig, WifiCameraOptions } from '../main/Globals'
 import type { GpsState } from '../main/gps/GpsService'
+import type {
+  BluetoothActionResult,
+  BluetoothSnapshot
+} from '../main/bluetooth/BluetoothService'
 import type { IpAddress, NetworkSnapshot, WifiConnectResult } from '../main/network/NetworkService'
 import type {
   RuntimeKind,
@@ -71,6 +75,11 @@ export interface CarplayApi {
     scanWifi(): Promise<NetworkSnapshot>
     connectWifi(ssid: string, password: string): Promise<WifiConnectResult>
     getIpAddresses(): Promise<IpAddress[]>
+  }
+  bluetooth: {
+    scan(): Promise<BluetoothSnapshot>
+    connect(address: string): Promise<BluetoothActionResult>
+    disconnect(address: string): Promise<BluetoothActionResult>
   }
   update: {
     getStatus(): Promise<SystemUpdateStatus>
