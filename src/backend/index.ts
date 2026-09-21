@@ -115,8 +115,10 @@ async function handleRpc(socket: Socket, request: RpcRequest): Promise<unknown> 
       return usb.getSysdefaultPrettyName()
     case 'wifiCamera.start': {
       const connection = await network.connectCameraWifi()
-      if (!connection.ok)
+      if (!connection.ok) {
         console.warn('[Backend] Camera Wi-Fi connection failed', connection.message)
+        return { ok: false, error: connection.message }
+      }
       return wifiCamera.start(requireCameraOptions(args[0]))
     }
     case 'wifiCamera.configure':

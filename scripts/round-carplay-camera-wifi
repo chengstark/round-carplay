@@ -19,13 +19,6 @@ if test "$ACTIVE_PROFILE" = "$PROFILE"; then
   exit 0
 fi
 
-PREVIOUS_UUID="$(nmcli -t -f UUID,DEVICE connection show --active | awk -F: '$2 == "wlan0" { print $1; exit }')"
-if [[ "$PREVIOUS_UUID" =~ ^[0-9A-Fa-f-]{36}$ ]]; then
-  install -d -m 0755 "$(dirname "$PREVIOUS_WIFI_FILE")"
-  printf '%s\n' "$PREVIOUS_UUID" > "$PREVIOUS_WIFI_FILE"
-  chmod 0600 "$PREVIOUS_WIFI_FILE"
-fi
-
 test -s "$PASSWORD_FILE" || {
   echo "Camera Wi-Fi password is not installed" >&2
   exit 78
@@ -57,5 +50,35 @@ nmcli connection modify "$PROFILE" \
   ipv4.method auto \
   ipv6.method disabled
 
+PREVIOUS_UUID="$(nmcli -t -f UUID,DEVICE connection show --active | awk -F: '$2 == "wlan0" { print $1; exit }')"
+install -d -m 0755 "$(dirname "$PREVIOUS_WIFI_FILE")"
+rm -f "$PREVIOUS_WIFI_FILE"
+if [[ "$PREVIOUS_UUID" =~ ^[0-9A-Fa-f-]{36}$ ]]; then
+  printf '%s\n' "$PREVIOUS_UUID" > "$PREVIOUS_WIFI_FILE"
+  chmod 0600 "$PREVIOUS_WIFI_FILE"
+fi
+
+restore_after_failure() {
+  status=$?
+  trap - EXIT
+  if test "$status" -ne 0; then
+    echo "Camera Wi-Fi activation failed; restoring the previous network" >&2
+    if [[ "$PREVIOUS_UUID" =~ ^[0-9A-Fa-f-]{36}$ ]] && \
+       nmcli connection show uuid "$PREVIOUS_UUID" >/dev/null 2>&1; then
+      nmcli --wait 30 connection up uuid "$PREVIOUS_UUID" ifname "$INTERFACE" >/dev/null 2>&1 || true
+    else
+      nmcli --wait 30 device connect "$INTERFACE" >/dev/null 2>&1 || true
+    fi
+    rm -f "$PREVIOUS_WIFI_FILE"
+  fi
+  exit "$status"
+}
+trap restore_after_failure EXIT
+
+# The Pi's single Wi-Fi radio can return only the current AP's BSSIDs during a
+# background scan. Releasing it first forces a full-channel foreground scan.
+nmcli device disconnect "$INTERFACE" >/dev/null 2>&1 || true
+nmcli device wifi rescan ifname "$INTERFACE" ssid "$SSID" >/dev/null
 nmcli --wait 30 connection up "$PROFILE" ifname "$INTERFACE"
+trap - EXIT
 unset PASSWORD

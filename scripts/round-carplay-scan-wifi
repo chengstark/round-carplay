@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+test "$(id -u)" -eq 0 || {
+  echo "Full Wi-Fi scanning requires root" >&2
+  exit 77
+}
+
+INTERFACE=wlan0
+PREVIOUS_UUID="$(nmcli -t -f UUID,DEVICE connection show --active | awk -F: '$2 == "wlan0" { print $1; exit }')"
+RESTORED=0
+
+restore_previous() {
+  if test "$RESTORED" -eq 1; then
+    return
+  fi
+  RESTORED=1
+  if [[ "$PREVIOUS_UUID" =~ ^[0-9A-Fa-f-]{36}$ ]] && \
+     nmcli connection show uuid "$PREVIOUS_UUID" >/dev/null 2>&1; then
+    if nmcli --wait 30 connection up uuid "$PREVIOUS_UUID" ifname "$INTERFACE" >/dev/null; then
+      return
+    fi
+    echo "Could not restore the previous Wi-Fi profile; trying automatic connection" >&2
+    nmcli --wait 30 device connect "$INTERFACE" >/dev/null
+  fi
+}
+trap restore_previous EXIT
+
+# NetworkManager/firmware background scans can remain pinned to the associated
+# AP's channel. Disconnect briefly, scan all channels, then restore the exact
+# profile that was active when the menu opened.
+nmcli device disconnect "$INTERFACE" >/dev/null 2>&1 || true
+SCAN_OUTPUT="$(nmcli \
+  --terse \
+  --escape yes \
+  --fields IN-USE,SSID,SIGNAL,SECURITY \
+  device wifi list \
+  ifname "$INTERFACE" \
+  --rescan yes)"
+restore_previous
+trap - EXIT
+
+printf '%s\n' "$SCAN_OUTPUT"

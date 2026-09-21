@@ -85,6 +85,7 @@ sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-browser-fallback" /usr/l
 sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-camera-wifi" /usr/local/sbin/round-carplay-camera-wifi
 sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-connect-wifi" /usr/local/sbin/round-carplay-connect-wifi
 sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-restore-wifi" /usr/local/sbin/round-carplay-restore-wifi
+sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-scan-wifi" /usr/local/sbin/round-carplay-scan-wifi
 
 CURSOR_THEME_NAME=round-carplay-transparent
 CURSOR_THEME_ROOT="/usr/local/share/icons/$CURSOR_THEME_NAME"
@@ -251,6 +252,7 @@ $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-runtime switch 
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-camera-wifi
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-connect-wifi
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-restore-wifi
+$INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-scan-wifi
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/systemctl reboot
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff
 EOF

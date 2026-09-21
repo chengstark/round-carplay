@@ -20,6 +20,9 @@
 - The live camera overlay displays measured decoded FPS and link diagnostics.
 - Opening the camera activates `eeye-camera`; closing it restores the previously
   active Wi-Fi profile.
+- Camera activation and the on-display Wi-Fi menu briefly release `wlan0` for a
+  full-channel scan. Both paths restore the exact prior profile on failure or
+  after a menu scan; this avoids scans that show only the current AP's BSSIDs.
 
 The protocol analysis and standalone probe live in the sibling workspace at
 `/Users/starkguo/Documents/wifi_backup_cam`.

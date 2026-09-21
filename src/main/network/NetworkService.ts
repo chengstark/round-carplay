@@ -7,6 +7,7 @@ const execFileAsync = promisify(execFile)
 const CAMERA_WIFI_SSID = 'backupcam_aee782870'
 const CAMERA_WIFI_HELPER = '/usr/local/sbin/round-carplay-camera-wifi'
 const CAMERA_WIFI_RESTORE_HELPER = '/usr/local/sbin/round-carplay-restore-wifi'
+const WIFI_SCAN_HELPER = '/usr/local/sbin/round-carplay-scan-wifi'
 const WIFI_CONNECT_HELPER = '/usr/local/sbin/round-carplay-connect-wifi'
 
 export type WifiNetwork = {
@@ -64,7 +65,7 @@ export class NetworkService {
       }
       await execFileAsync('sudo', ['-n', CAMERA_WIFI_HELPER], {
         encoding: 'utf8',
-        timeout: 35_000,
+        timeout: 70_000,
         maxBuffer: 512 * 1024,
         env: { ...process.env, LC_ALL: 'C' }
       })
@@ -140,18 +141,15 @@ export class NetworkService {
         const restored = await this.restoreCameraWifi()
         if (!restored.ok) throw new Error(restored.message)
       }
-      const { stdout } = await runNmcli([
-        '--terse',
-        '--escape',
-        'yes',
-        '--fields',
-        'IN-USE,SSID,SIGNAL,SECURITY',
-        'device',
-        'wifi',
-        'list',
-        '--rescan',
-        'yes'
-      ])
+      if (!existsSync(WIFI_SCAN_HELPER)) {
+        throw new Error('Full Wi-Fi scan helper is not installed; rerun the kiosk installer')
+      }
+      const { stdout } = await execFileAsync('sudo', ['-n', WIFI_SCAN_HELPER], {
+        encoding: 'utf8',
+        timeout: 70_000,
+        maxBuffer: 512 * 1024,
+        env: { ...process.env, LC_ALL: 'C' }
+      })
 
       return {
         available: true,
@@ -302,15 +300,6 @@ function splitNmcliLine(line: string): string[] {
 
   if (escaped) fields[fields.length - 1] += '\\'
   return fields
-}
-
-function runNmcli(args: string[]): Promise<{ stdout: string; stderr: string }> {
-  return execFileAsync('nmcli', args, {
-    encoding: 'utf8',
-    timeout: 35_000,
-    maxBuffer: 512 * 1024,
-    env: { ...process.env, LC_ALL: 'C' }
-  })
 }
 
 function commandErrorMessage(error: unknown): string {

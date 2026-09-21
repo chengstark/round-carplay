@@ -361,14 +361,19 @@ app.whenReady().then(() => {
   ipcMain.handle('get-sysdefault-mic-label', () => usbService.getSysdefaultPrettyName())
   ipcMain.handle('getSettings', () => config)
   ipcMain.handle('save-settings', (_event, settings: ExtraConfig) => saveSettings(settings))
-  ipcMain.handle('wifi-camera-start', (_event, options) => {
-    void networkService.connectCameraWifi().then(result => {
-      if (!result.ok) console.warn(`[WifiCamera] Camera Wi-Fi connection failed: ${result.message}`)
-    })
+  ipcMain.handle('wifi-camera-start', async (_event, options) => {
+    const connection = await networkService.connectCameraWifi()
+    if (!connection.ok) {
+      console.warn(`[WifiCamera] Camera Wi-Fi connection failed: ${connection.message}`)
+      return { ok: false, error: connection.message }
+    }
     return wifiCameraService.start(options)
   })
   ipcMain.handle('wifi-camera-configure', (_event, options) => wifiCameraService.configure(options))
-  ipcMain.handle('wifi-camera-stop', () => wifiCameraService.stop())
+  ipcMain.handle('wifi-camera-stop', async () => {
+    wifiCameraService.stop()
+    return networkService.restoreCameraWifi()
+  })
   ipcMain.on('wifi-camera-frame-ack', () => wifiCameraService.acknowledgeFrame())
   ipcMain.handle('gps-get-state', () => gpsService.getState())
   ipcMain.handle('network-scan-wifi', () => networkService.scanWifi())
