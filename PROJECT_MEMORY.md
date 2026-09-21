@@ -19,8 +19,9 @@
   frames to the browser UI. This avoids relying on Chromium HEVC support.
 - The live camera overlay displays measured decoded FPS and link diagnostics.
 - Opening the camera activates `eeye-camera`. Closing only stops the stream and
-  deliberately keeps the camera hotspot active for fast reopening. Opening the
-  System Menu restores the previously active Wi-Fi profile before scanning.
+  deliberately keeps the camera hotspot active for fast reopening. Opening or
+  refreshing the System Menu does not change the active connection; normal
+  Wi-Fi resumes only when the user explicitly selects another network.
 - Camera activation briefly releases `wlan0` and restores the exact prior
   profile if activation fails. The on-display Wi-Fi menu must never disconnect
   the active profile merely to scan; a partial list is safer than stranding the

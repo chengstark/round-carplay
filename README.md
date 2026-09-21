@@ -54,8 +54,8 @@ Opening the integrated camera automatically connects the Pi to the
 so the kiosk does not require keyboard input. The camera connection profile
 explicitly disables Wi-Fi power saving each time it is repaired and activated.
 Closing the camera keeps the camera hotspot active so reopening the video is
-fast. Opening the System Menu restores the Wi-Fi profile that was active before
-the camera and then performs its normal network scan.
+fast. Opening or refreshing the System Menu scans without changing the active
+connection. Normal Wi-Fi resumes only when another network is selected there.
 
 The Camera tab continues to support ordinary USB cameras through the browser
 media-device API. The older XIAO-only SDL diagnostic viewer is retained for

@@ -6,7 +6,6 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 const CAMERA_WIFI_SSID = 'backcam_aee72870'
 const CAMERA_WIFI_HELPER = '/usr/local/sbin/round-carplay-camera-wifi'
-const CAMERA_WIFI_RESTORE_HELPER = '/usr/local/sbin/round-carplay-restore-wifi'
 const WIFI_SCAN_HELPER = '/usr/local/sbin/round-carplay-scan-wifi'
 const WIFI_CONNECT_HELPER = '/usr/local/sbin/round-carplay-connect-wifi'
 
@@ -38,7 +37,6 @@ export type WifiConnectResult = {
 /** NetworkManager bridge for the on-display Wi-Fi picker. */
 export class NetworkService {
   private cameraWifiAttempt: Promise<WifiConnectResult> | null = null
-  private cameraWifiRestoreAttempt: Promise<WifiConnectResult> | null = null
 
   connectCameraWifi(): Promise<WifiConnectResult> {
     if (this.cameraWifiAttempt) return this.cameraWifiAttempt
@@ -83,49 +81,6 @@ export class NetworkService {
     }
   }
 
-  restoreCameraWifi(): Promise<WifiConnectResult> {
-    if (this.cameraWifiRestoreAttempt) return this.cameraWifiRestoreAttempt
-
-    const attempt = this.restoreCameraWifiInternal().finally(() => {
-      if (this.cameraWifiRestoreAttempt === attempt) this.cameraWifiRestoreAttempt = null
-    })
-    this.cameraWifiRestoreAttempt = attempt
-    return attempt
-  }
-
-  private async restoreCameraWifiInternal(): Promise<WifiConnectResult> {
-    if (process.platform !== 'linux') {
-      return {
-        ok: true,
-        message: 'Camera Wi-Fi restoration is not required',
-        ipAddresses: this.getIpAddresses()
-      }
-    }
-
-    try {
-      if (!existsSync(CAMERA_WIFI_RESTORE_HELPER)) {
-        throw new Error('Camera Wi-Fi restore helper is not installed; rerun the kiosk installer')
-      }
-      await execFileAsync('sudo', ['-n', CAMERA_WIFI_RESTORE_HELPER], {
-        encoding: 'utf8',
-        timeout: 35_000,
-        maxBuffer: 512 * 1024,
-        env: { ...process.env, LC_ALL: 'C' }
-      })
-      return {
-        ok: true,
-        message: 'Normal Wi-Fi restored',
-        ipAddresses: this.getIpAddresses()
-      }
-    } catch (error) {
-      return {
-        ok: false,
-        message: commandErrorMessage(error),
-        ipAddresses: this.getIpAddresses()
-      }
-    }
-  }
-
   async scanWifi(): Promise<NetworkSnapshot> {
     if (process.platform !== 'linux') {
       return {
@@ -137,10 +92,6 @@ export class NetworkService {
     }
 
     try {
-      if (existsSync(CAMERA_WIFI_RESTORE_HELPER)) {
-        const restored = await this.restoreCameraWifi()
-        if (!restored.ok) throw new Error(restored.message)
-      }
       if (!existsSync(WIFI_SCAN_HELPER)) {
         throw new Error('Full Wi-Fi scan helper is not installed; rerun the kiosk installer')
       }
