@@ -73,8 +73,12 @@ disabled. The display shows `-- MPH` until the receiver has a valid GPS fix.
 The menu button in the upper surround opens a panel over the CarPlay square;
 CarPlay remains mounted and reappears immediately when the panel closes. The
 panel can change the surround color, scan and connect to NetworkManager Wi-Fi
-networks, and display the Pi's active IPv4 addresses. Raspberry Pi OS Bookworm
-and newer use NetworkManager by default.
+networks, connect or disconnect Bluetooth devices, and display the Pi's active
+IPv4 addresses. Bluetooth audio sinks become the default output and receive
+active CarPlay/Chromium audio streams. Raspberry Pi OS Bookworm and newer use
+NetworkManager by default. After first adding Bluetooth support, rerun
+`setup-browser-kiosk.sh`; an application-only update cannot install `pactl` or
+replace the privileged Bluetooth helper.
 
 ## Installation (Raspberry Pi OS)
 

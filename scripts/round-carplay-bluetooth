@@ -145,16 +145,31 @@ case "$COMMAND" in
   connect)
     validate_address
     prepare_controller
-    OUTPUT="$(
-      {
-        printf 'agent NoInputNoOutput\n'
-        printf 'default-agent\n'
-        printf 'pair %s\n' "$ADDRESS"
-        printf 'trust %s\n' "$ADDRESS"
-        printf 'connect %s\n' "$ADDRESS"
-        printf 'quit\n'
-      } | bluetoothctl --timeout 45 2>&1
-    )" || true
+    bluetoothctl pairable on >/dev/null
+    OUTPUT=
+    if ! bluetoothctl info "$ADDRESS" | grep -q '^[[:space:]]*Paired: yes'; then
+      # Register the agent at bluetoothctl startup and wait for pairing to
+      # finish. Piping pair, trust, connect, and quit together can destroy the
+      # agent before BlueZ finishes a Just Works pairing request.
+      PAIR_OUTPUT="$(
+        bluetoothctl \
+          --agent NoInputNoOutput \
+          --timeout 45 \
+          pair "$ADDRESS" 2>&1
+      )" || true
+      OUTPUT="$PAIR_OUTPUT"
+    fi
+    TRUST_OUTPUT="$(bluetoothctl trust "$ADDRESS" 2>&1)" || true
+    OUTPUT="${OUTPUT}${OUTPUT:+$'\n'}${TRUST_OUTPUT}"
+    for _attempt in {1..3}; do
+      if bluetoothctl info "$ADDRESS" | grep -q '^[[:space:]]*Connected: yes'; then
+        break
+      fi
+      CONNECT_OUTPUT="$(bluetoothctl --timeout 20 connect "$ADDRESS" 2>&1)" || true
+      OUTPUT="${OUTPUT}${OUTPUT:+$'\n'}${CONNECT_OUTPUT}"
+      sleep 1
+    done
+    bluetoothctl pairable off >/dev/null 2>&1 || true
     if ! bluetoothctl info "$ADDRESS" | grep -q '^[[:space:]]*Connected: yes'; then
       printf '%s\n' "$OUTPUT" >&2
       echo "Bluetooth connection failed" >&2

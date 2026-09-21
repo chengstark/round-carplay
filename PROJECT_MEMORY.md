@@ -36,6 +36,10 @@
   helper selects its A2DP profile, makes it the default PipeWire/PulseAudio
   sink, moves existing CarPlay/Chromium streams to it, and restores the prior
   sink when the device disconnects.
+- Bluetooth pairing launches `bluetoothctl` with its NoInputNoOutput agent
+  already registered and waits for pairing before trust/connect. The first
+  Bluetooth-capable deployment must rerun the full kiosk setup because an
+  application-only update cannot install `pactl` or replace the root helper.
 
 The protocol analysis and standalone probe live in the sibling workspace at
 `/Users/starkguo/Documents/wifi_backup_cam`.
