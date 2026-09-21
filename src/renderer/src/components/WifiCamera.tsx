@@ -369,7 +369,7 @@ export default function WifiCamera({
             </Typography>
             {status.state === 'error' && (
               <Typography variant="caption" sx={{ mt: 1.5, opacity: 0.65 }}>
-                Connect this device to the backupcam_aee782870 Wi-Fi network.
+                Connect this device to the backcam_aee72870 Wi-Fi network.
               </Typography>
             )}
           </div>

@@ -8,7 +8,7 @@ test "$(id -u)" -eq 0 || {
 
 PROFILE=eeye-camera
 INTERFACE=wlan0
-SSID=backupcam_aee782870
+SSID=backcam_aee72870
 PASSWORD_FILE=/etc/round-carplay/eeye-camera-wifi-password
 PREVIOUS_WIFI_FILE=/run/round-carplay/previous-wifi-uuid
 

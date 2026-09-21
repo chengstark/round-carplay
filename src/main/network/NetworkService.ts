@@ -4,7 +4,7 @@ import { networkInterfaces } from 'node:os'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
-const CAMERA_WIFI_SSID = 'backupcam_aee782870'
+const CAMERA_WIFI_SSID = 'backcam_aee72870'
 const CAMERA_WIFI_HELPER = '/usr/local/sbin/round-carplay-camera-wifi'
 const CAMERA_WIFI_RESTORE_HELPER = '/usr/local/sbin/round-carplay-restore-wifi'
 const WIFI_SCAN_HELPER = '/usr/local/sbin/round-carplay-scan-wifi'

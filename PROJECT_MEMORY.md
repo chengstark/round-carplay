@@ -9,7 +9,7 @@
 ## Wi-Fi backup camera
 
 - Device: E-Eye backup camera.
-- Camera SSID supplied by the owner: `backupcam_aee782870`.
+- Camera SSID confirmed from the Pi scan and the camera MAC suffix: `backcam_aee72870`.
 - Its WPA-PSK is stored only on the Pi in the root-readable
   `/etc/round-carplay/eeye-camera-wifi-password` file; it must not be committed.
 - Camera address: `192.168.10.1`.

@@ -28,7 +28,7 @@ Support for Linux (ARM/x86) and macOS (ARM) as well. It is a standalone Electron
 
 The right-side crescent button opens the integrated E-Eye Wi-Fi backup camera.
 Double-tap the button to open or close the feed. The host running Round CarPlay
-must be connected to `backupcam_aee782870`. The application sends XMIP control JSON
+must be connected to `backcam_aee72870`. The application sends XMIP control JSON
 to `192.168.10.1:2222`, receives framed H.265 media from TCP port `2223`, and
 uses ffmpeg to decode it for Chromium. A compact live strip at the top of the
 camera screen reports stream state, decoded FPS, H.265 data rate, frame size,
@@ -50,7 +50,7 @@ NetworkManager and at kiosk startup to reduce latency spikes and dropouts. Wi-Fi
 through the on-display system menu are saved as preferred, persistent
 NetworkManager profiles with unlimited automatic reconnect attempts.
 Opening the integrated camera automatically connects the Pi to the
-`backupcam_aee782870` hotspot using the password stored by the installer,
+`backcam_aee72870` hotspot using the password stored by the installer,
 so the kiosk does not require keyboard input. The camera connection profile
 explicitly disables Wi-Fi power saving each time it is repaired and activated.
 Closing the camera restores the Wi-Fi profile that was active before it opened.
