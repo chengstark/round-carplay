@@ -8,6 +8,7 @@ test "$(id -u)" -eq 0 || {
 
 COMMAND="${1:-}"
 ADDRESS="${2:-}"
+AUDIO_STATE_FILE=/run/round-carplay/previous-bluetooth-audio-sink
 
 validate_address() {
   [[ "$ADDRESS" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]] || {
@@ -24,6 +25,105 @@ prepare_controller() {
     exit 1
   }
   bluetoothctl power on >/dev/null
+}
+
+prepare_audio_user() {
+  INSTALL_HOME="$(sed -n '1p' /etc/round-carplay/install-user-home 2>/dev/null || true)"
+  test -n "$INSTALL_HOME" || {
+    echo "Round CarPlay install user is not configured" >&2
+    return 1
+  }
+  AUDIO_USER="$(stat -c '%U' "$INSTALL_HOME")"
+  AUDIO_UID="$(id -u "$AUDIO_USER")"
+  AUDIO_RUNTIME_DIR="/run/user/$AUDIO_UID"
+  test -d "$AUDIO_RUNTIME_DIR" || {
+    echo "The kiosk audio session is not running" >&2
+    return 1
+  }
+}
+
+audio_pactl() {
+  runuser -u "$AUDIO_USER" -- env \
+    LC_ALL=C \
+    XDG_RUNTIME_DIR="$AUDIO_RUNTIME_DIR" \
+    DBUS_SESSION_BUS_ADDRESS="unix:path=$AUDIO_RUNTIME_DIR/bus" \
+    pactl "$@"
+}
+
+is_audio_sink() {
+  bluetoothctl info "$ADDRESS" | grep -Eqi 'Audio Sink|0000110b-0000-1000-8000-00805f9b34fb'
+}
+
+route_audio() {
+  prepare_audio_user
+  audio_pactl info >/dev/null
+
+  MAC_TOKEN="${ADDRESS//:/_}"
+  PREVIOUS_SINK="$(audio_pactl info | awk -F': ' '$1 == "Default Sink" { print $2; exit }')"
+  CARD=
+  for _attempt in {1..15}; do
+    CARD="$(audio_pactl list short cards | awk -v token="$MAC_TOKEN" '$2 ~ ("bluez_card\\." token) { print $2; exit }')"
+    test -n "$CARD" && break
+    sleep 1
+  done
+  test -n "$CARD" || {
+    echo "Bluetooth speaker connected, but its audio card did not appear" >&2
+    return 1
+  }
+
+  # PipeWire-Pulse and PulseAudio both expose the standard A2DP profile name.
+  audio_pactl set-card-profile "$CARD" a2dp-sink >/dev/null 2>&1 || true
+
+  TARGET_SINK=
+  for _attempt in {1..15}; do
+    TARGET_SINK="$(audio_pactl list short sinks | awk -v token="$MAC_TOKEN" '$2 ~ ("bluez_output\\." token) { print $2; exit }')"
+    test -n "$TARGET_SINK" && break
+    sleep 1
+  done
+  test -n "$TARGET_SINK" || {
+    echo "Bluetooth speaker connected, but its A2DP output did not appear" >&2
+    return 1
+  }
+
+  if ! audio_pactl set-default-sink "$TARGET_SINK"; then
+    echo "Bluetooth speaker connected, but it could not become the default output" >&2
+    return 1
+  fi
+
+  RESTORE_SINK="$PREVIOUS_SINK"
+  if test -s "$AUDIO_STATE_FILE"; then
+    RESTORE_SINK="$(sed -n '2p' "$AUDIO_STATE_FILE")"
+  fi
+  install -d -m 0755 "$(dirname "$AUDIO_STATE_FILE")"
+  if test -n "$RESTORE_SINK"; then
+    printf '%s\n%s\n' "$ADDRESS" "$RESTORE_SINK" > "$AUDIO_STATE_FILE"
+    chmod 0600 "$AUDIO_STATE_FILE"
+  fi
+
+  while IFS=$'\t' read -r INPUT_ID _rest; do
+    test -n "$INPUT_ID" || continue
+    audio_pactl move-sink-input "$INPUT_ID" "$TARGET_SINK" >/dev/null 2>&1 || true
+  done < <(audio_pactl list short sink-inputs)
+}
+
+restore_audio() {
+  test -s "$AUDIO_STATE_FILE" || return 0
+  SAVED_ADDRESS="$(sed -n '1p' "$AUDIO_STATE_FILE")"
+  test "$SAVED_ADDRESS" = "$ADDRESS" || return 0
+  PREVIOUS_SINK="$(sed -n '2p' "$AUDIO_STATE_FILE")"
+  prepare_audio_user || return 0
+
+  if ! audio_pactl list short sinks | awk -v sink="$PREVIOUS_SINK" '$2 == sink { found=1 } END { exit !found }'; then
+    PREVIOUS_SINK="$(audio_pactl list short sinks | awk '$2 !~ /^bluez_output\./ { print $2; exit }')"
+  fi
+  if test -n "$PREVIOUS_SINK"; then
+    audio_pactl set-default-sink "$PREVIOUS_SINK" >/dev/null 2>&1 || true
+    while IFS=$'\t' read -r INPUT_ID _rest; do
+      test -n "$INPUT_ID" || continue
+      audio_pactl move-sink-input "$INPUT_ID" "$PREVIOUS_SINK" >/dev/null 2>&1 || true
+    done < <(audio_pactl list short sink-inputs)
+  fi
+  rm -f "$AUDIO_STATE_FILE"
 }
 
 case "$COMMAND" in
@@ -60,10 +160,15 @@ case "$COMMAND" in
       echo "Bluetooth connection failed" >&2
       exit 1
     fi
+    if is_audio_sink && ! route_audio; then
+      bluetoothctl disconnect "$ADDRESS" >/dev/null 2>&1 || true
+      exit 1
+    fi
     ;;
   disconnect)
     validate_address
     prepare_controller
+    restore_audio
     bluetoothctl disconnect "$ADDRESS" >/dev/null
     ;;
   *)

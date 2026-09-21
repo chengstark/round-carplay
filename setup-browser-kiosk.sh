@@ -33,6 +33,7 @@ command -v node >/dev/null 2>&1 || missing_packages+=(nodejs)
 command -v npm >/dev/null 2>&1 || missing_packages+=(npm)
 command -v ffmpeg >/dev/null 2>&1 || missing_packages+=(ffmpeg)
 command -v bluetoothctl >/dev/null 2>&1 || missing_packages+=(bluez)
+command -v pactl >/dev/null 2>&1 || missing_packages+=(pulseaudio-utils)
 if test -z "$CHROMIUM"; then missing_packages+=(chromium); fi
 
 if test "${#missing_packages[@]}" -gt 0; then

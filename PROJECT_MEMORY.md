@@ -30,6 +30,10 @@
 - The browser system menu includes Bluetooth discovery and pair/connect or
   disconnect controls immediately below Wi-Fi. BlueZ mutations run through the
   validated root helper `/usr/local/sbin/round-carplay-bluetooth`.
+- When a connected Bluetooth device advertises the Audio Sink service, the
+  helper selects its A2DP profile, makes it the default PipeWire/PulseAudio
+  sink, moves existing CarPlay/Chromium streams to it, and restores the prior
+  sink when the device disconnects.
 
 The protocol analysis and standalone probe live in the sibling workspace at
 `/Users/starkguo/Documents/wifi_backup_cam`.
