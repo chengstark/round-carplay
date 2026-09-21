@@ -372,9 +372,9 @@ app.whenReady().then(() => {
     return wifiCameraService.start(options)
   })
   ipcMain.handle('wifi-camera-configure', (_event, options) => wifiCameraService.configure(options))
-  ipcMain.handle('wifi-camera-stop', async () => {
+  ipcMain.handle('wifi-camera-stop', () => {
     wifiCameraService.stop()
-    return networkService.restoreCameraWifi()
+    return { ok: true, message: 'Camera stopped; camera Wi-Fi kept active for fast reopening' }
   })
   ipcMain.on('wifi-camera-frame-ack', () => wifiCameraService.acknowledgeFrame())
   ipcMain.handle('gps-get-state', () => gpsService.getState())

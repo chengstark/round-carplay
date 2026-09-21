@@ -127,9 +127,7 @@ async function handleRpc(socket: Socket, request: RpcRequest): Promise<unknown> 
       return wifiCamera.configure(requireCameraOptions(args[0]))
     case 'wifiCamera.stop': {
       wifiCamera.stop()
-      const restored = await network.restoreCameraWifi()
-      if (!restored.ok) console.warn('[Backend] Previous Wi-Fi restoration failed', restored.message)
-      return restored
+      return { ok: true, message: 'Camera stopped; camera Wi-Fi kept active for fast reopening' }
     }
     case 'wifiCamera.acknowledgeFrame':
       wifiCamera.acknowledgeFrame()

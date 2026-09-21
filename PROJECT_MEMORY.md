@@ -18,8 +18,9 @@
 - The backend decodes H.265 with ffmpeg and sends bounded, acknowledged JPEG
   frames to the browser UI. This avoids relying on Chromium HEVC support.
 - The live camera overlay displays measured decoded FPS and link diagnostics.
-- Opening the camera activates `eeye-camera`; closing it restores the previously
-  active Wi-Fi profile.
+- Opening the camera activates `eeye-camera`. Closing only stops the stream and
+  deliberately keeps the camera hotspot active for fast reopening. Opening the
+  System Menu restores the previously active Wi-Fi profile before scanning.
 - Camera activation briefly releases `wlan0` and restores the exact prior
   profile if activation fails. The on-display Wi-Fi menu must never disconnect
   the active profile merely to scan; a partial list is safer than stranding the
