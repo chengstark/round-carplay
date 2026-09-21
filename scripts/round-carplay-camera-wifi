@@ -65,7 +65,9 @@ restore_after_failure() {
     echo "Camera Wi-Fi activation failed; restoring the previous network" >&2
     if [[ "$PREVIOUS_UUID" =~ ^[0-9A-Fa-f-]{36}$ ]] && \
        nmcli connection show uuid "$PREVIOUS_UUID" >/dev/null 2>&1; then
-      nmcli --wait 30 connection up uuid "$PREVIOUS_UUID" ifname "$INTERFACE" >/dev/null 2>&1 || true
+      if ! nmcli --wait 30 connection up uuid "$PREVIOUS_UUID" ifname "$INTERFACE" >/dev/null 2>&1; then
+        nmcli --wait 30 device connect "$INTERFACE" >/dev/null 2>&1 || true
+      fi
     else
       nmcli --wait 30 device connect "$INTERFACE" >/dev/null 2>&1 || true
     fi
