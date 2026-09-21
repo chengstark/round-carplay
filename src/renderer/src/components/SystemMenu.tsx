@@ -250,7 +250,11 @@ export default function SystemMenu({
         zIndex: 50,
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'hidden',
+        overflowX: 'hidden',
+        overflowY: 'auto',
+        overscrollBehavior: 'contain',
+        touchAction: 'pan-y',
+        WebkitOverflowScrolling: 'touch',
         p: 1.5,
         color: '#fff',
         background: 'linear-gradient(155deg, #171a1e 0%, #08090a 75%)'
