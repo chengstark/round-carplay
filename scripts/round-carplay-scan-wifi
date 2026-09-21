@@ -30,13 +30,37 @@ trap restore_previous EXIT
 # AP's channel. Disconnect briefly, scan all channels, then restore the exact
 # profile that was active when the menu opened.
 nmcli device disconnect "$INTERFACE" >/dev/null 2>&1 || true
-SCAN_OUTPUT="$(nmcli \
-  --terse \
-  --escape yes \
-  --fields IN-USE,SSID,SIGNAL,SECURITY \
-  device wifi list \
-  ifname "$INTERFACE" \
-  --rescan yes)"
+SCAN_REQUESTED=0
+for _attempt in {1..10}; do
+  if nmcli device wifi rescan ifname "$INTERFACE" >/dev/null 2>&1; then
+    SCAN_REQUESTED=1
+    break
+  fi
+  sleep 1
+done
+test "$SCAN_REQUESTED" -eq 1 || {
+  echo "The Wi-Fi adapter did not become ready for scanning" >&2
+  exit 1
+}
+
+SCAN_OUTPUT=
+for _attempt in {1..10}; do
+  sleep 1
+  SCAN_OUTPUT="$(nmcli \
+    --terse \
+    --escape yes \
+    --fields IN-USE,SSID,SIGNAL,SECURITY \
+    device wifi list \
+    ifname "$INTERFACE" \
+    --rescan no)"
+  if test -n "$SCAN_OUTPUT"; then
+    break
+  fi
+done
+test -n "$SCAN_OUTPUT" || {
+  echo "The Wi-Fi scan completed without returning any networks" >&2
+  exit 1
+}
 restore_previous
 trap - EXIT
 

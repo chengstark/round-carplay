@@ -78,7 +78,19 @@ trap restore_after_failure EXIT
 # The Pi's single Wi-Fi radio can return only the current AP's BSSIDs during a
 # background scan. Releasing it first forces a full-channel foreground scan.
 nmcli device disconnect "$INTERFACE" >/dev/null 2>&1 || true
-nmcli device wifi rescan ifname "$INTERFACE" ssid "$SSID" >/dev/null
+SCAN_REQUESTED=0
+for _attempt in {1..10}; do
+  if nmcli device wifi rescan ifname "$INTERFACE" ssid "$SSID" >/dev/null 2>&1; then
+    SCAN_REQUESTED=1
+    break
+  fi
+  sleep 1
+done
+test "$SCAN_REQUESTED" -eq 1 || {
+  echo "The Wi-Fi adapter did not become ready for a camera scan" >&2
+  exit 1
+}
+sleep 2
 nmcli --wait 30 connection up "$PROFILE" ifname "$INTERFACE"
 trap - EXIT
 unset PASSWORD
