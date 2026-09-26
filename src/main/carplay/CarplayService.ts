@@ -9,18 +9,14 @@ import {
   Command,
   SendCommand,
   SendTouch,
-  SendAudio,
   DongleDriver,
   DongleConfig,
-  DEFAULT_CONFIG,
-  decodeTypeMap,
-  AudioCommand
+  DEFAULT_CONFIG
 } from './messages'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import usb from 'usb'
-import NodeMicrophone from './node/NodeMicrophone'
 import { NULL_EVENT_SINK, type ServiceEventSink } from '../events/ServiceEventSink'
 
 let dongleConnected = false
@@ -53,12 +49,10 @@ export class CarplayService {
   private config: DongleConfig = DEFAULT_CONFIG
   private pairTimeout: NodeJS.Timeout | null = null
   private frameInterval: NodeJS.Timeout | null = null
-  private _mic: NodeMicrophone | null = null
   private startPromise: Promise<void> | null = null
   private started = false
   private stopping = false
   private shuttingDown = false
-  private audioInfoSent = false
   private videoFrameCount = 0
   private videoWidth = 0
   private videoHeight = 0
@@ -111,52 +105,10 @@ export class CarplayService {
         const packet = (msg.data.buffer as ArrayBuffer).slice(packetStart, packetEnd)
         this.sendChunked('carplay-video-chunk', packet, 512 * 1024)
       } else if (msg instanceof AudioData) {
-        if (msg.data) {
-          this.sendChunked('carplay-audio-chunk', msg.data.buffer as ArrayBuffer, 64 * 1024, {
-            ...msg
-          })
-          if (!this.audioInfoSent) {
-            const meta = decodeTypeMap[msg.decodeType]
-            if (meta) {
-              this.events.send('carplay-event', {
-                type: 'audioInfo',
-                payload: {
-                  codec: meta.format ?? meta.mimeType,
-                  sampleRate: meta.frequency,
-                  channels: meta.channel,
-                  bitDepth: meta.bitDepth
-                }
-              })
-              this.audioInfoSent = true
-            }
-          }
-        } else if (msg.command != null) {
-          console.debug('[CarplayService] Received audio command:', msg.command)
-          if (
-            msg.command === AudioCommand.AudioSiriStart ||
-            msg.command === AudioCommand.AudioPhonecallStart
-          ) {
-            if (this.config.audioTransferMode) {
-              console.debug(
-                '[CarplayService] Skipping microphone start because audioTransferMode is enabled'
-              )
-              return
-            }
-            if (!this._mic) {
-              console.debug('[CarplayService] Initializing microphone')
-              this._mic = new NodeMicrophone()
-              this._mic.on('data', (data: Buffer) => {
-                this.driver.send(new SendAudio(new Int16Array(data.buffer)))
-              })
-            }
-            this._mic.start()
-          } else if (
-            msg.command === AudioCommand.AudioSiriStop ||
-            msg.command === AudioCommand.AudioPhonecallStop
-          ) {
-            this._mic?.stop()
-          }
-        }
+        // Display-only mode deliberately discards any PCM or microphone
+        // commands a dongle may still emit. Audio belongs to the phone's
+        // direct Bluetooth connection to the car.
+        return
       } else if (msg instanceof MediaData) {
         this.events.send('carplay-event', { type: 'media', payload: msg })
         fs.mkdirSync(this.dataDirectory, { recursive: true })
@@ -227,12 +179,12 @@ export class CarplayService {
     try {
       const configPath = path.join(this.dataDirectory, 'config.json')
       const userConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'))
-      this.config = { ...this.config, ...userConfig }
+      this.config = { ...this.config, ...userConfig, audioTransferMode: true }
     } catch {
       // fallback to DEFAULT_CONFIG
     }
 
-    console.debug('[CarplayService] audioTransferMode:', this.config.audioTransferMode)
+    console.debug('[CarplayService] display-only mode: phone handles audio directly')
 
     const device = usb
       .getDeviceList()
@@ -255,7 +207,6 @@ export class CarplayService {
         this.driver.send(new SendCommand('wifiPair'))
       }, 15000)
       this.started = true
-      this.audioInfoSent = false
       this.videoFrameCount = 0
       this.videoWidth = 0
       this.videoHeight = 0
@@ -276,13 +227,7 @@ export class CarplayService {
     } catch (err) {
       console.warn('[CarplayService] driver.close() failed', err)
     }
-    try {
-      this._mic?.stop()
-    } catch (err) {
-      console.warn('[CarplayService] mic.stop() failed', err)
-    }
     this.started = false
-    this.audioInfoSent = false
     this.videoFrameCount = 0
     this.videoWidth = 0
     this.videoHeight = 0

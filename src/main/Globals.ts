@@ -10,11 +10,7 @@ export type ExtraConfig = DongleConfig & {
   wifiCameraJpegQuality: number,
   wifiCameraHorizontalFlip: boolean,
   gpsSmoothing: number,
-  microphone: string,
   bindings: KeyBindings,
-  audioVolume: number;
-  navVolume: number;
-  outputGain: number;
 }
 
 /** Clockwise camera rotation in degrees, normalized to the range 0–359. */

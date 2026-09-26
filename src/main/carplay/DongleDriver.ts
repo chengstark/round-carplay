@@ -41,7 +41,6 @@ export type DongleConfig = {
   mediaDelay: number
   audioTransferMode: boolean
   wifiType: '2.4ghz' | '5ghz'
-  micType: 'box' | 'os'
   phoneConfig: Partial<PhoneTypeConfigMap>
 }
 
@@ -58,9 +57,10 @@ export const DEFAULT_CONFIG: DongleConfig = {
   nightMode: true,
   hand: HandDriveType.LHD,
   mediaDelay: 500,
-  audioTransferMode: false,
+  // Round CarPlay is display/control only. The phone owns the audio route and
+  // sends it directly to the car's Bluetooth connection.
+  audioTransferMode: true,
   wifiType: '5ghz',
-  micType: 'os',
   phoneConfig: {
     [PhoneType.CarPlay]: { frameInterval: 5000 },
     [PhoneType.AndroidAuto]: { frameInterval: null }
@@ -171,8 +171,7 @@ export class DongleDriver extends EventEmitter {
       new SendBoxSettings(cfg),
       new SendCommand('wifiEnable'),
       new SendCommand(cfg.wifiType === '5ghz' ? 'wifi5g' : 'wifi24g'),
-      new SendCommand(cfg.micType === 'box' ? 'boxMic' : 'mic'),
-      new SendCommand(cfg.audioTransferMode ? 'audioTransferOn' : 'audioTransferOff')
+      new SendCommand('audioTransferOn')
     ]
     if (cfg.androidWorkMode)
       messages.push(new SendBoolean(cfg.androidWorkMode, FileAddress.ANDROID_WORK_MODE))

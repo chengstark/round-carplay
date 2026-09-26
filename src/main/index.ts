@@ -177,11 +177,7 @@ function loadConfig(): ExtraConfig {
     wifiCameraJpegQuality: 20,
     wifiCameraHorizontalFlip: false,
     gpsSmoothing: 0.55,
-    microphone: '',
     nightMode: true,
-    audioVolume: 1.0,
-    navVolume: 0.5,
-    outputGain: 10,
     bindings: { ...DEFAULT_BINDINGS },
     ...fileConfig
   } as ExtraConfig
@@ -197,7 +193,12 @@ function loadConfig(): ExtraConfig {
   merged.wifiCameraJpegQuality = normalizeWifiCameraJpegQuality(merged.wifiCameraJpegQuality)
   merged.wifiCameraHorizontalFlip = normalizeWifiCameraHorizontalFlip(merged.wifiCameraHorizontalFlip)
   merged.gpsSmoothing = normalizeGpsSmoothing(merged.gpsSmoothing)
-  merged.outputGain = normalizeOutputGain(merged.outputGain)
+  merged.audioTransferMode = true
+  delete (merged as unknown as Record<string, unknown>).audioVolume
+  delete (merged as unknown as Record<string, unknown>).navVolume
+  delete (merged as unknown as Record<string, unknown>).outputGain
+  delete (merged as unknown as Record<string, unknown>).microphone
+  delete (merged as unknown as Record<string, unknown>).micType
 
   const needWrite = !existsSync(configPath) || JSON.stringify(fileConfig) !== JSON.stringify(merged)
 
@@ -360,7 +361,6 @@ app.whenReady().then(() => {
   ipcMain.handle('usb-detect-dongle', () => usbService.detectDongle())
   ipcMain.handle('carplay:usbDevice', () => usbService.getDeviceInfo())
   ipcMain.handle('usb-last-event', () => usbService.getLastEvent())
-  ipcMain.handle('get-sysdefault-mic-label', () => usbService.getSysdefaultPrettyName())
   ipcMain.handle('getSettings', () => config)
   ipcMain.handle('save-settings', (_event, settings: ExtraConfig) => saveSettings(settings))
   ipcMain.handle('wifi-camera-start', async (_event, options) => {
@@ -450,7 +450,7 @@ function saveSettings(settings: ExtraConfig) {
         wifiCameraJpegQuality: normalizeWifiCameraJpegQuality(settings.wifiCameraJpegQuality),
         wifiCameraHorizontalFlip: normalizeWifiCameraHorizontalFlip(settings.wifiCameraHorizontalFlip),
         gpsSmoothing: normalizeGpsSmoothing(settings.gpsSmoothing),
-        outputGain: normalizeOutputGain(settings.outputGain)
+        audioTransferMode: true
       },
       null,
       2
@@ -458,10 +458,9 @@ function saveSettings(settings: ExtraConfig) {
   )
 
   const gpsSmoothing = normalizeGpsSmoothing(settings.gpsSmoothing)
-  const outputGain = normalizeOutputGain(settings.outputGain)
-  config = { ...settings, gpsSmoothing, outputGain }
+  config = { ...settings, gpsSmoothing, audioTransferMode: true }
   gpsService.setSmoothing(gpsSmoothing)
-  socket.config = { ...settings, gpsSmoothing, outputGain }
+  socket.config = { ...settings, gpsSmoothing, audioTransferMode: true }
   socket.sendSettings()
   electronEvents.send('settings', config)
 
@@ -516,12 +515,6 @@ function normalizeGpsSmoothing(value: unknown): number {
   const smoothing = Number(value)
   if (!Number.isFinite(smoothing)) return 0.55
   return Math.min(0.9, Math.max(0, smoothing))
-}
-
-function normalizeOutputGain(value: unknown): number {
-  const gain = Number(value)
-  if (!Number.isFinite(gain)) return 10
-  return Math.min(100, Math.max(5, Math.round(gain / 5) * 5))
 }
 
 function normalizeBackgroundColor(value: unknown): string {

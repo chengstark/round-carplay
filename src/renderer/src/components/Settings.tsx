@@ -45,10 +45,8 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
 
   const [activeSettings, setActiveSettings] = useState<ExtraConfig>({
     ...settings,
-    audioVolume: settings.audioVolume ?? 1.0,
-    navVolume: settings.navVolume ?? 1.0,
+    audioTransferMode: true
   })
-  const [micLabel, setMicLabel] = useState('no device available')
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([])
   const [openBindings, setOpenBindings] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
@@ -65,14 +63,14 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
   useEffect(() => () => debouncedSave.cancel(), [debouncedSave])
 
   const requiresRestartParams: (keyof ExtraConfig)[] = [
-    'width', 'height', 'fps', 'dpi', 'format', 'mediaDelay', 'phoneWorkMode', 'wifiType', 'micType', 'audioTransferMode'
+    'width', 'height', 'fps', 'dpi', 'format', 'mediaDelay', 'phoneWorkMode', 'wifiType'
   ]
 
   const settingsChange = (key: keyof ExtraConfig, value: any) => {
     const updated = { ...activeSettings, [key]: value }
     setActiveSettings(updated)
 
-    if (['audioVolume', 'navVolume', 'wifiCameraRotation', 'wifiCameraJpegQuality'].includes(key)) {
+    if (['wifiCameraRotation', 'wifiCameraJpegQuality'].includes(key)) {
       debouncedSave(updated)
     } else if (['kiosk', 'nightMode'].includes(key)) {
       saveSettings(updated)
@@ -123,28 +121,6 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
   }, [resetMessage])
 
   useEffect(() => {
-    const updateMic = async () => {
-      try {
-        const label = await window.carplay.usb.getSysdefaultPrettyName()
-        const final = label && !['sysdefault', 'null'].includes(label) ? label : 'no device available'
-        setMicLabel(final)
-        if (!activeSettings.microphone && final !== 'no device available') {
-          const upd = { ...activeSettings, microphone: 'sysdefault' }
-          setActiveSettings(upd)
-          debouncedSave(upd)
-        }
-      } catch {
-        console.warn('[Settings] Mic label fetch failed')
-      }
-    }
-    updateMic()
-    const micUsbHandler = (_: any, data: { type: string }) => {
-      if (['attach', 'plugged', 'detach', 'unplugged'].includes(data.type)) updateMic()
-    }
-    window.carplay.usb.listenForEvents(micUsbHandler)
-  }, [])
-
-  useEffect(() => {
     detectCameras(setCameraFound, saveSettings, activeSettings).then(setCameras)
     const usbHandler = (_: any, data: { type: string }) => {
       if (['attach', 'plugged', 'detach', 'unplugged'].includes(data.type)) {
@@ -166,19 +142,6 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
         onChange={e => settingsChange(key, Number(e.target.value))}
         sx={{ mx: 2, maxWidth: 140 }}
       />
-    </Grid>
-  )
-
-  const renderSliderField = (label: string, key: keyof ExtraConfig) => (
-    <Grid size={{ xs: 6 }} key={String(key)}>
-      <FormControl fullWidth sx={{ px: 2 }}>
-        <FormLabel>{label}</FormLabel>
-        <Slider
-          value={Math.round((activeSettings[key] as number) * 100)}
-          min={0} max={100} step={5} marks valueLabelDisplay="auto"
-          onChange={(_, v) => typeof v === 'number' && settingsChange(key, v / 100)}
-        />
-      </FormControl>
     </Grid>
   )
 
@@ -220,15 +183,21 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
           {renderField('IBOX VERSION', 'iBoxVersion')}
           {renderField('MEDIA DELAY', 'mediaDelay')}
           {renderField('PHONE WORK MODE', 'phoneWorkMode')}
-          {renderSliderField('AUDIO VOLUME', 'audioVolume')}
-          {renderSliderField('NAV VOLUME', 'navVolume')}
+
+          <Grid size={{ xs: 6 }} sx={{ minWidth: 280, mx: 2 }}>
+            <FormControl fullWidth>
+              <FormLabel>AUDIO</FormLabel>
+              <Typography variant="body2">
+                Display only — audio plays directly from the phone through the car Bluetooth.
+              </Typography>
+            </FormControl>
+          </Grid>
 
           <Grid size={{ xs: 3 }} sx={{ minWidth: 140, mx: 2, display: 'flex', justifyContent: 'center' }}>
             <FormControl>
               <Stack direction="column" spacing={0.5}>
                 <FormControlLabel control={<Checkbox checked={activeSettings.kiosk} onChange={e => settingsChange('kiosk', e.target.checked)} />} label="KIOSK" />
                 <FormControlLabel control={<Checkbox checked={activeSettings.nightMode} onChange={e => settingsChange('nightMode', e.target.checked)} />} label="DARK MODE" />
-                <FormControlLabel control={<Checkbox checked={activeSettings.audioTransferMode} onChange={e => settingsChange('audioTransferMode', e.target.checked)} />} label="DISABLE AUDIO" />
               </Stack>
             </FormControl>
           </Grid>
@@ -307,10 +276,6 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
             <Typography variant="caption" color="text.secondary">
               E-Eye sends H.265 at 25 FPS. VGA 640×480 is the validated mode.
             </Typography>
-          </Grid>
-
-          <Grid size={{ xs: 3 }} sx={{ minWidth: 140, mx: 2, display: 'flex', justifyContent: 'center' }}>
-            <FormControl fullWidth><FormLabel>MICROPHONE</FormLabel><RadioGroup value={activeSettings.micType} onChange={e => settingsChange('micType', e.target.value)}><Stack direction="column"><FormControlLabel value="os" control={<Radio />} label={<Typography noWrap>OS: {micLabel}</Typography>} /><FormControlLabel value="box" control={<Radio />} label="BOX" /></Stack></RadioGroup></FormControl>
           </Grid>
 
           {cameras.length > 0 && renderCameras()}

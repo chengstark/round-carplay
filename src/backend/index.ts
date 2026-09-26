@@ -113,8 +113,6 @@ async function handleRpc(socket: Socket, request: RpcRequest): Promise<unknown> 
       return usb.getDeviceInfo()
     case 'usb.getLastEvent':
       return usb.getLastEvent()
-    case 'usb.getSysdefaultPrettyName':
-      return usb.getSysdefaultPrettyName()
     case 'wifiCamera.start': {
       const connection = await network.connectCameraWifi()
       if (!connection.ok) {
@@ -227,10 +225,9 @@ function serveHttp(request: IncomingMessage, response: ServerResponse): void {
 
   response.writeHead(200, {
     'Content-Type': mimeType(extname(file)),
-    'Cache-Control':
-      file.endsWith('index.html') || file.endsWith('audio.worklet.js')
-        ? 'no-store'
-        : 'public, max-age=31536000, immutable',
+    'Cache-Control': file.endsWith('index.html')
+      ? 'no-store'
+      : 'public, max-age=31536000, immutable',
     'Cross-Origin-Opener-Policy': 'same-origin',
     'Cross-Origin-Embedder-Policy': 'require-corp',
     'Cross-Origin-Resource-Policy': 'same-origin',

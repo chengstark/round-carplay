@@ -19,11 +19,8 @@ function installBrowserApi(): void {
   const usbHandlers = new Set<Listener>()
   const usbQueue: unknown[] = []
   let videoHandler: Listener | null = null
-  let audioHandler: Listener | null = null
   const videoQueue: unknown[] = []
-  const audioQueue: unknown[] = []
   const assembleVideo = createChunkAssembler(20 * 1024 * 1024)
-  const assembleAudio = createChunkAssembler(2 * 1024 * 1024)
 
   socket.on('usb-event', (payload) => {
     if (usbHandlers.size) usbHandlers.forEach((handler) => handler(undefined, payload))
@@ -35,13 +32,6 @@ function installBrowserApi(): void {
     if (videoHandler) videoHandler(normalized)
     else pushBounded(videoQueue, normalized, 64)
   })
-  socket.on('carplay-audio-chunk', (payload) => {
-    const normalized = assembleAudio(payload)
-    if (!normalized) return
-    if (audioHandler) audioHandler(normalized)
-    else pushBounded(audioQueue, normalized, 128)
-  })
-
   const api: CarplayApi = {
     quit: () => rpc(socket, 'quit'),
     onUSBResetStatus: (callback) => {
@@ -53,7 +43,6 @@ function installBrowserApi(): void {
       detectDongle: () => rpc(socket, 'usb.detectDongle'),
       getDeviceInfo: () => rpc(socket, 'usb.getDeviceInfo'),
       getLastEvent: () => rpc(socket, 'usb.getLastEvent'),
-      getSysdefaultPrettyName: () => rpc(socket, 'usb.getSysdefaultPrettyName'),
       listenForEvents: (callback) => {
         usbHandlers.add(callback)
         usbQueue.splice(0).forEach((payload) => callback(undefined, payload))
@@ -113,10 +102,6 @@ function installBrowserApi(): void {
       onVideoChunk: (handler) => {
         videoHandler = handler
         videoQueue.splice(0).forEach(handler)
-      },
-      onAudioChunk: (handler) => {
-        audioHandler = handler
-        audioQueue.splice(0).forEach(handler)
       }
     }
   }

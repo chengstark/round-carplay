@@ -1,19 +1,14 @@
 import { webusb } from 'usb'
-import NodeMicrophone from './NodeMicrophone'
-
 import {
-  AudioData,
   MediaData,
   Message,
   Plugged,
-  SendAudio,
   SendCommand,
   SendTouch,
   Unplugged,
   VideoData,
   CommandValue,
   Command,
-  AudioCommand,
 } from '../messages'
 
 import {
@@ -26,7 +21,6 @@ export type CarplayMessage =
   | { type: 'plugged'; message?: undefined }
   | { type: 'unplugged'; message?: undefined }
   | { type: 'failure'; message?: undefined }
-  | { type: 'audio'; message: AudioData }
   | { type: 'video'; message: VideoData }
   | { type: 'media'; message: MediaData }
   | { type: 'command'; message: Command }
@@ -42,12 +36,7 @@ export default class CarplayNode {
 
   constructor(config: Partial<DongleConfig>) {
     this._config = Object.assign({}, DEFAULT_CONFIG, config)
-    const mic = new NodeMicrophone()
     const driver = new DongleDriver()
-
-    mic.on('data', data => {
-      driver.send(new SendAudio(data))
-    })
 
     driver.on('message', (message: Message) => {
       if (message instanceof Plugged) {
@@ -66,27 +55,11 @@ export default class CarplayNode {
       } else if (message instanceof VideoData) {
         this.clearPairTimeout()
         this.onmessage?.({ type: 'video', message })
-      } else if (message instanceof AudioData) {
-        this.clearPairTimeout()
-        this.onmessage?.({ type: 'audio', message })
       } else if (message instanceof MediaData) {
         this.clearPairTimeout()
         this.onmessage?.({ type: 'media', message })
       } else if (message instanceof Command) {
         this.onmessage?.({ type: 'command', message })
-      }
-
-      if (message instanceof AudioData && message.command != null) {
-        switch (message.command) {
-          case AudioCommand.AudioSiriStart:
-          case AudioCommand.AudioPhonecallStart:
-            mic.start()
-            break
-          case AudioCommand.AudioSiriStop:
-          case AudioCommand.AudioPhonecallStop:
-            mic.stop()
-            break
-        }
       }
     })
 

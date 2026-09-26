@@ -29,17 +29,17 @@
 - Selecting `backcam_aee72870` in the ordinary Wi-Fi menu launches the same
   protected camera workflow as the dedicated camera control. It must not use
   the generic password connector or expose the root-only camera password.
-- The browser system menu includes Bluetooth discovery and pair/connect or
-  disconnect controls immediately below Wi-Fi. BlueZ mutations run through the
-  validated root helper `/usr/local/sbin/round-carplay-bluetooth`.
-- When a connected Bluetooth device advertises the Audio Sink service, the
-  helper selects its A2DP profile, makes it the default PipeWire/PulseAudio
-  sink, moves existing CarPlay/Chromium streams to it, and restores the prior
-  sink when the device disconnects.
-- Bluetooth pairing launches `bluetoothctl` with its NoInputNoOutput agent
-  already registered and waits for pairing before trust/connect. The first
-  Bluetooth-capable deployment must rerun the full kiosk setup because an
-  application-only update cannot install `pactl` or replace the root helper.
+
+## CarPlay audio
+
+- Round CarPlay is display/control-only. It always sends AutoKit's
+  `audioTransferOn` command, never creates a local PCM player or microphone,
+  and discards any audio packets the dongle still emits.
+- The phone pairs directly with the car stereo for all media, navigation,
+  call, and Siri audio. The Pi must not pair with the car's Bluetooth audio
+  endpoint because that would compete with the phone connection.
+- Audio gain and Pi Bluetooth connection controls are intentionally absent
+  from the on-display menus.
 
 The protocol analysis and standalone probe live in the sibling workspace at
 `/Users/starkguo/Documents/wifi_backup_cam`.

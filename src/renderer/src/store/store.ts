@@ -20,16 +20,6 @@ export interface CarplayStore {
   product: string | null
   fwVersion: string | null
 
-  // Audio-Metadata
-  audioCodec: string | null
-  audioSampleRate: number | null
-  audioChannels: number | null
-  audioBitDepth: number | null
-
-  // PCM-Data for FFT
-  audioPcmData: Float32Array | null
-  setPcmData: (data: Float32Array) => void
-
   // Setter
   setDeviceInfo: (info: {
     serial: string
@@ -38,12 +28,6 @@ export interface CarplayStore {
     fwVersion: string
   }) => void
   setNegotiatedResolution: (width: number, height: number) => void
-  setAudioInfo: (info: {
-    codec: string
-    sampleRate: number
-    channels: number
-    bitDepth: number
-  }) => void
 }
 
 export const useCarplayStore = create<CarplayStore>((set) => ({
@@ -72,11 +56,6 @@ export const useCarplayStore = create<CarplayStore>((set) => ({
       manufacturer: null,
       product: null,
       fwVersion: null,
-      audioCodec: null,
-      audioSampleRate: null,
-      audioChannels: null,
-      audioBitDepth: null,
-      audioPcmData: null,
     }),
 
   negotiatedWidth: null,
@@ -86,27 +65,11 @@ export const useCarplayStore = create<CarplayStore>((set) => ({
   product: null,
   fwVersion: null,
 
-  audioCodec: null,
-  audioSampleRate: null,
-  audioChannels: null,
-  audioBitDepth: null,
-
-  audioPcmData: null,
-  setPcmData: (data) => set({ audioPcmData: data }),
-
   setDeviceInfo: ({ serial, manufacturer, product, fwVersion }) =>
     set({ serial, manufacturer, product, fwVersion }),
 
   setNegotiatedResolution: (width, height) =>
     set({ negotiatedWidth: width, negotiatedHeight: height }),
-
-  setAudioInfo: ({ codec, sampleRate, channels, bitDepth }) =>
-    set({
-      audioCodec: codec,
-      audioSampleRate: sampleRate,
-      audioChannels: channels,
-      audioBitDepth: bitDepth,
-    }),
 }))
 
 // Status store

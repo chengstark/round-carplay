@@ -133,24 +133,6 @@ export class SendMultiTouch extends SendableMessageWithPayload {
   }
 }
 
-export class SendAudio extends SendableMessageWithPayload {
-  type = MessageType.AudioData
-  data: Int16Array
-
-  getPayload(): Buffer {
-    const audioData = Buffer.alloc(12)
-    audioData.writeUInt32LE(5, 0)
-    audioData.writeFloatLE(0.0, 4)
-    audioData.writeUInt32LE(3, 8)
-    return Buffer.concat([audioData, Buffer.from(this.data.buffer)])
-  }
-
-  constructor(data: Int16Array) {
-    super()
-    this.data = data
-  }
-}
-
 export class SendFile extends SendableMessageWithPayload {
   type = MessageType.SendFile
   content: Buffer

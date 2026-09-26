@@ -1,15 +1,5 @@
 /// <reference types="@webgpu/types" />
 
-declare module 'pcm-ringbuf-player' {
-  export class PcmPlayer {
-    readonly sab: SharedArrayBuffer
-    constructor(sampleRate: number, channels: number)
-    volume(volume: number, duration?: number): void
-    start(): void
-    stop(): void
-  }
-}
-
 interface USBDevice {
   readonly productName?: string
   readonly manufacturerName?: string

@@ -44,7 +44,6 @@ export interface CarplayApi {
     detectDongle(): Promise<boolean>
     getDeviceInfo(): Promise<UsbDeviceInfo>
     getLastEvent(): Promise<UsbEvent>
-    getSysdefaultPrettyName(): Promise<string>
     listenForEvents(callback: ApiCallback<any>): void
     unlistenForEvents(callback: ApiCallback<any>): void
   }
@@ -100,6 +99,5 @@ export interface CarplayApi {
     sendKeyCommand(key: string): void
     onEvent(callback: ApiCallback<any>): unknown
     onVideoChunk(handler: (payload: any) => void): void
-    onAudioChunk(handler: (payload: any) => void): void
   }
 }

@@ -66,11 +66,7 @@ function normalizeConfig(value: Partial<ExtraConfig>): ExtraConfig {
     wifiCameraJpegQuality: 20,
     wifiCameraHorizontalFlip: false,
     gpsSmoothing: 0.55,
-    microphone: '',
     nightMode: true,
-    audioVolume: 1,
-    navVolume: 0.5,
-    outputGain: 10,
     ...value,
     bindings: { ...DEFAULT_BINDINGS, ...(value.bindings ?? {}) }
   } as ExtraConfig
@@ -96,18 +92,20 @@ function normalizeConfig(value: Partial<ExtraConfig>): ExtraConfig {
   )
   merged.wifiCameraHorizontalFlip = merged.wifiCameraHorizontalFlip === true
   merged.gpsSmoothing = Math.min(0.9, Math.max(0, finiteNumber(merged.gpsSmoothing, 0.55)))
-  merged.outputGain = normalizeOutputGain(merged.outputGain)
+  // This runtime is a CarPlay display/controller only. Persist the direct
+  // phone-to-car audio route even when migrating an older saved config.
+  merged.audioTransferMode = true
+  delete (merged as unknown as Record<string, unknown>).audioVolume
+  delete (merged as unknown as Record<string, unknown>).navVolume
+  delete (merged as unknown as Record<string, unknown>).outputGain
+  delete (merged as unknown as Record<string, unknown>).microphone
+  delete (merged as unknown as Record<string, unknown>).micType
   return merged
 }
 
 function finiteNumber(value: unknown, fallback: number): number {
   const number = Number(value)
   return Number.isFinite(number) ? number : fallback
-}
-
-function normalizeOutputGain(value: unknown): number {
-  const gain = finiteNumber(value, 10)
-  return Math.min(100, Math.max(5, Math.round(gain / 5) * 5))
 }
 
 function normalizeHost(value: unknown): string {

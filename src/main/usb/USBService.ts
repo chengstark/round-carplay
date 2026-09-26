@@ -1,7 +1,6 @@
 import type { Device } from 'usb'
 import { CarplayService } from '../carplay/CarplayService'
 import { findDongle } from './helpers'
-import NodeMicrophone from '../carplay/node/NodeMicrophone'
 import { NULL_EVENT_SINK, type ServiceEventSink } from '../events/ServiceEventSink'
 
 import * as usbModule from 'usb'
@@ -117,10 +116,6 @@ export class USBService {
       }
     }
     return { type: 'unplugged', device: null }
-  }
-
-  public getSysdefaultPrettyName(): string {
-    return NodeMicrophone.getSysdefaultPrettyName()
   }
 
   public forceReset(): Promise<boolean> {

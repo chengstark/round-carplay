@@ -36,24 +36,12 @@ type ChunkHandler = (payload: any) => void
 let videoChunkQueue: any[] = []
 let videoChunkHandler: ChunkHandler | null = null
 
-let audioChunkQueue: any[] = []
-let audioChunkHandler: ChunkHandler | null = null
-
 ipcRenderer.on('carplay-video-chunk', (_event, payload) => {
   if (videoChunkHandler) {
     videoChunkHandler(payload)
   } else {
     videoChunkQueue.push(payload)
     console.log('[PRELOAD] Video chunk queued (no handler set)')
-  }
-})
-
-ipcRenderer.on('carplay-audio-chunk', (_event, payload) => {
-  if (audioChunkHandler) {
-    audioChunkHandler(payload)
-  } else {
-    audioChunkQueue.push(payload)
-    console.log('[PRELOAD] Audio chunk queued (no handler set)')
   }
 })
 
@@ -70,7 +58,6 @@ export const api: CarplayApi = {
     detectDongle: () => ipcRenderer.invoke('usb-detect-dongle'),
     getDeviceInfo: () => ipcRenderer.invoke('carplay:usbDevice'),
     getLastEvent: () => ipcRenderer.invoke('usb-last-event'),
-    getSysdefaultPrettyName: () => ipcRenderer.invoke('get-sysdefault-mic-label'),
     listenForEvents: (callback: ApiCallback<any>) => {
       usbEventHandlers.push(callback)
       usbEventQueue.forEach(([evt, ...args]) => callback(evt, ...args))
@@ -173,11 +160,6 @@ export const api: CarplayApi = {
       videoChunkHandler = handler
       videoChunkQueue.forEach((chunk) => handler(chunk))
       videoChunkQueue = []
-    },
-    onAudioChunk: (handler: ChunkHandler) => {
-      audioChunkHandler = handler
-      audioChunkQueue.forEach((chunk) => handler(chunk))
-      audioChunkQueue = []
     }
   }
 }

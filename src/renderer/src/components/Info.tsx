@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
-import { Typography, Box, Divider, useTheme } from '@mui/material'
+import { Typography, Box, useTheme } from '@mui/material'
 import { useCarplayStore, useStatusStore } from '../store/store'
-import FFTSpectrum from './FFT'
 
 export default function Info() {
   const theme = useTheme()
@@ -17,17 +16,8 @@ export default function Info() {
   const product          = useCarplayStore(s => s.product)
   const fwVersion        = useCarplayStore(s => s.fwVersion)
 
-  // Audio metadata
-  const audioCodec      = useCarplayStore(s => s.audioCodec)
-  const audioSampleRate = useCarplayStore(s => s.audioSampleRate)
-  const audioChannels   = useCarplayStore(s => s.audioChannels)
-  const audioBitDepth   = useCarplayStore(s => s.audioBitDepth)
-
   // Connection status
   const isStreaming = useStatusStore(s => s.isStreaming)
-
-  // PCM data state for FFT
-  const pcmData = useCarplayStore(s => s.audioPcmData) ?? new Float32Array(0)
 
   const highlight = (val: any) =>
     val != null ? theme.palette.primary.main : theme.palette.text.primary
@@ -122,53 +112,7 @@ export default function Info() {
           </Typography>
         </Box>
 
-        {/* Audio Info + FFT */}
-        <Box sx={{ flex: '1 1 100%', display: 'flex', flexWrap: 'nowrap', gap: 2 }}>
-          <Box sx={{ flex: '1 1 40%', minWidth: 240, alignSelf: 'center' }}>
-            <Typography variant="h6" gutterBottom>
-              Audio Info
-            </Typography>
-            <Typography>
-              <strong>Codec:</strong>{' '}
-              <Box component="span" color={highlight(audioCodec)}>
-                {audioCodec || '—'}
-              </Box>
-            </Typography>
-            <Typography>
-              <strong>Samplerate:</strong>{' '}
-              <Box component="span" color={highlight(audioSampleRate)}>
-                {audioSampleRate ? `${audioSampleRate} Hz` : '—'}
-              </Box>
-            </Typography>
-            <Typography>
-              <strong>Channels:</strong>{' '}
-              <Box component="span" color={highlight(audioChannels)}>
-                {audioChannels || '—'}
-              </Box>
-            </Typography>
-            <Typography>
-              <strong>Bit depth:</strong>{' '}
-              <Box component="span" color={highlight(audioBitDepth)}>
-                {audioBitDepth ? `${audioBitDepth} bit` : '—'}
-              </Box>
-            </Typography>
-          </Box>
-          <Box
-            sx={{
-              flex: '1 1 60%',
-              minWidth: 240,
-              height: { xs: 150, sm: 200, md: 250 },
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <FFTSpectrum data={pcmData} />
-          </Box>
-        </Box>
       </Box>
-
-      <Divider sx={{ my: 2 }} />
     </Box>
   )
 }
