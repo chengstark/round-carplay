@@ -278,6 +278,27 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
             </Typography>
           </Grid>
 
+          <Grid size={{ xs: 3 }} sx={{ minWidth: 220, mx: 2 }}>
+            <FormControlLabel
+              control={(
+                <Checkbox
+                  checked={activeSettings.wifiCameraHorizontalFlip}
+                  onChange={event => settingsChange('wifiCameraHorizontalFlip', event.target.checked)}
+                />
+              )}
+              label="WI-FI CAMERA HORIZONTAL FLIP"
+            />
+            <FormControlLabel
+              control={(
+                <Checkbox
+                  checked={activeSettings.wifiCameraVerticalFlip}
+                  onChange={event => settingsChange('wifiCameraVerticalFlip', event.target.checked)}
+                />
+              )}
+              label="WI-FI CAMERA VERTICAL FLIP"
+            />
+          </Grid>
+
           {cameras.length > 0 && renderCameras()}
         </Grid>
       </Box>

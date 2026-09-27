@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   FormControl,
+  FormControlLabel,
   IconButton,
   MenuItem,
   Select,
   Slider,
   Stack,
+  Switch,
   Typography
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
@@ -44,10 +46,14 @@ export default function WifiCamera({
 }): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rotationRef = useRef<WifiCameraRotation>(rotation)
+  const horizontalFlipRef = useRef(cameraOptions.horizontalFlip)
+  const verticalFlipRef = useRef(cameraOptions.verticalFlip)
   const frameEpochRef = useRef(0)
   const [calibrating, setCalibrating] = useState(false)
   const [draftRotation, setDraftRotation] = useState(rotation)
   const [draftFrameSize, setDraftFrameSize] = useState(cameraOptions.frameSize)
+  const [draftHorizontalFlip, setDraftHorizontalFlip] = useState(cameraOptions.horizontalFlip)
+  const [draftVerticalFlip, setDraftVerticalFlip] = useState(cameraOptions.verticalFlip)
   const [hasFrame, setHasFrame] = useState(false)
   const [status, setStatus] = useState<CameraStatus>({
     state: 'connecting',
@@ -74,8 +80,17 @@ export default function WifiCamera({
   useEffect(() => {
     if (!calibrating) {
       setDraftFrameSize(cameraOptions.frameSize)
+      horizontalFlipRef.current = cameraOptions.horizontalFlip
+      verticalFlipRef.current = cameraOptions.verticalFlip
+      setDraftHorizontalFlip(cameraOptions.horizontalFlip)
+      setDraftVerticalFlip(cameraOptions.verticalFlip)
     }
-  }, [cameraOptions.frameSize, calibrating])
+  }, [
+    cameraOptions.frameSize,
+    cameraOptions.horizontalFlip,
+    cameraOptions.verticalFlip,
+    calibrating
+  ])
 
   const updateDraftRotation = (value: number): void => {
     const rounded = Math.round(value)
@@ -96,9 +111,17 @@ export default function WifiCamera({
     setCalibrating(true)
   }
 
-  const applyCameraTuning = async (frameSize: WifiCameraFrameSize): Promise<void> => {
-    const next = { ...cameraOptions, frameSize }
+  const applyCameraTuning = async (
+    frameSize: WifiCameraFrameSize,
+    horizontalFlip = draftHorizontalFlip,
+    verticalFlip = draftVerticalFlip
+  ): Promise<void> => {
+    const next = { ...cameraOptions, frameSize, horizontalFlip, verticalFlip }
     setDraftFrameSize(frameSize)
+    horizontalFlipRef.current = horizontalFlip
+    verticalFlipRef.current = verticalFlip
+    setDraftHorizontalFlip(horizontalFlip)
+    setDraftVerticalFlip(verticalFlip)
     onCameraOptionsSave(next)
 
     const result = await window.carplay.wifiCamera.configure(next)
@@ -181,6 +204,10 @@ export default function WifiCamera({
           context.save()
           context.translate(width / 2, height / 2)
           context.rotate(radians)
+          context.scale(
+            horizontalFlipRef.current ? -1 : 1,
+            verticalFlipRef.current ? -1 : 1
+          )
           context.drawImage(
             bitmap,
             -drawWidth / 2,
@@ -529,8 +556,34 @@ export default function WifiCamera({
               E-Eye H.265 · 25 FPS. VGA 640×480 is validated.
             </Typography>
           </Stack>
+          <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 0.5 }}>
+            <FormControlLabel
+              control={(
+                <Switch
+                  checked={draftHorizontalFlip}
+                  onChange={(_, checked) => {
+                    void applyCameraTuning(draftFrameSize, checked, draftVerticalFlip)
+                  }}
+                />
+              )}
+              label="Horizontal flip"
+              sx={{ mx: 0 }}
+            />
+            <FormControlLabel
+              control={(
+                <Switch
+                  checked={draftVerticalFlip}
+                  onChange={(_, checked) => {
+                    void applyCameraTuning(draftFrameSize, draftHorizontalFlip, checked)
+                  }}
+                />
+              )}
+              label="Vertical flip"
+              sx={{ mx: 0 }}
+            />
+          </Stack>
           <Typography variant="caption" display="block" align="center" sx={{ opacity: 0.72 }}>
-            Resolution changes reconnect the stream and are saved.
+            Flip changes apply live. Resolution changes reconnect the stream. All are saved.
           </Typography>
           <Typography
             variant="caption"

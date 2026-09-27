@@ -65,6 +65,7 @@ function normalizeConfig(value: Partial<ExtraConfig>): ExtraConfig {
     wifiCameraFrameSize: 8,
     wifiCameraJpegQuality: 20,
     wifiCameraHorizontalFlip: false,
+    wifiCameraVerticalFlip: false,
     gpsSmoothing: 0.55,
     nightMode: true,
     ...value,
@@ -91,6 +92,7 @@ function normalizeConfig(value: Partial<ExtraConfig>): ExtraConfig {
     Math.max(4, Math.round(finiteNumber(merged.wifiCameraJpegQuality, 20)))
   )
   merged.wifiCameraHorizontalFlip = merged.wifiCameraHorizontalFlip === true
+  merged.wifiCameraVerticalFlip = merged.wifiCameraVerticalFlip === true
   merged.gpsSmoothing = Math.min(0.9, Math.max(0, finiteNumber(merged.gpsSmoothing, 0.55)))
   // This runtime is a CarPlay display/controller only. Persist the direct
   // phone-to-car audio route even when migrating an older saved config.

@@ -39,11 +39,13 @@ The complete 16:9 camera image is displayed as the largest rectangle that fits
 inside the circular screen, so none of the source frame is cropped. The camera
 can be rotated continuously from `0°` through `359°`; the slider and `−1°` /
 `+1°` buttons support coarse and fine adjustment, and the selection is saved
-across restarts. For visual calibration, tap the adjustment button at the top
-center of the live feed. Resolution changes are sent in the XMIP `realplay`
-request and persist in the application config. VGA `640×480` at 25 FPS is the
-validated default. While the camera is open it covers the clock and surround
-controls and provides a dedicated exit button at the upper left.
+across restarts. Horizontal and vertical flip controls apply directly to the
+displayed image and are also saved across restarts. For visual calibration, tap
+the adjustment button at the top center of the live feed. Resolution changes
+are sent in the XMIP `realplay` request and persist in the application config.
+VGA `640×480` at 25 FPS is the validated default. While the camera is open it
+covers the clock and surround controls and provides a dedicated exit button at
+the upper left.
 
 The Pi setup script installs ffmpeg and disables Wi-Fi power saving through
 NetworkManager and at kiosk startup to reduce latency spikes and dropouts. Wi-Fi networks selected

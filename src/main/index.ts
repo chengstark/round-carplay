@@ -176,6 +176,7 @@ function loadConfig(): ExtraConfig {
     wifiCameraFrameSize: 8,
     wifiCameraJpegQuality: 20,
     wifiCameraHorizontalFlip: false,
+    wifiCameraVerticalFlip: false,
     gpsSmoothing: 0.55,
     nightMode: true,
     bindings: { ...DEFAULT_BINDINGS },
@@ -192,6 +193,7 @@ function loadConfig(): ExtraConfig {
   merged.wifiCameraFrameSize = normalizeWifiCameraFrameSize(merged.wifiCameraFrameSize)
   merged.wifiCameraJpegQuality = normalizeWifiCameraJpegQuality(merged.wifiCameraJpegQuality)
   merged.wifiCameraHorizontalFlip = normalizeWifiCameraHorizontalFlip(merged.wifiCameraHorizontalFlip)
+  merged.wifiCameraVerticalFlip = normalizeWifiCameraVerticalFlip(merged.wifiCameraVerticalFlip)
   merged.gpsSmoothing = normalizeGpsSmoothing(merged.gpsSmoothing)
   merged.audioTransferMode = true
   delete (merged as unknown as Record<string, unknown>).audioVolume
@@ -449,6 +451,7 @@ function saveSettings(settings: ExtraConfig) {
         wifiCameraFrameSize: normalizeWifiCameraFrameSize(settings.wifiCameraFrameSize),
         wifiCameraJpegQuality: normalizeWifiCameraJpegQuality(settings.wifiCameraJpegQuality),
         wifiCameraHorizontalFlip: normalizeWifiCameraHorizontalFlip(settings.wifiCameraHorizontalFlip),
+        wifiCameraVerticalFlip: normalizeWifiCameraVerticalFlip(settings.wifiCameraVerticalFlip),
         gpsSmoothing: normalizeGpsSmoothing(settings.gpsSmoothing),
         audioTransferMode: true
       },
@@ -508,6 +511,10 @@ function normalizeWifiCameraJpegQuality(value: unknown): number {
 }
 
 function normalizeWifiCameraHorizontalFlip(value: unknown): boolean {
+  return value === true
+}
+
+function normalizeWifiCameraVerticalFlip(value: unknown): boolean {
   return value === true
 }
 

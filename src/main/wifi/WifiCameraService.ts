@@ -6,7 +6,8 @@ import { NULL_EVENT_SINK, type ServiceEventSink } from '../events/ServiceEventSi
 
 const execFileAsync = promisify(execFile)
 const DEFAULT_OPTIONS: WifiCameraOptions = {
-  host: '192.168.10.1', frameSize: 8, jpegQuality: 20, horizontalFlip: false
+  host: '192.168.10.1', frameSize: 8, jpegQuality: 20,
+  horizontalFlip: false, verticalFlip: false
 }
 const CONTROL_PORT = 2222
 const MEDIA_PORT = 2223
@@ -571,7 +572,8 @@ function normalizeOptions(options: Partial<WifiCameraOptions> | null | undefined
     // Retained for backwards-compatible saved config; E-Eye sends H.265 and
     // does not expose the old ESP32 JPEG-quality or mirror controls.
     jpegQuality: normalizeJpegQuality(options?.jpegQuality),
-    horizontalFlip: options?.horizontalFlip === true
+    horizontalFlip: options?.horizontalFlip === true,
+    verticalFlip: options?.verticalFlip === true
   }
 }
 

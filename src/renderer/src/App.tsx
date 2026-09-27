@@ -631,7 +631,8 @@ function App() {
                 host: settings?.wifiCameraHost ?? '192.168.10.1',
                 frameSize: settings?.wifiCameraFrameSize ?? 8,
                 jpegQuality: settings?.wifiCameraJpegQuality ?? 20,
-                horizontalFlip: settings?.wifiCameraHorizontalFlip ?? false
+                horizontalFlip: settings?.wifiCameraHorizontalFlip ?? false,
+                verticalFlip: settings?.wifiCameraVerticalFlip ?? false
               }}
               onRotationSave={rotation => {
                 if (settings) saveSettings({ ...settings, wifiCameraRotation: rotation });
@@ -643,7 +644,8 @@ function App() {
                     wifiCameraHost: options.host,
                     wifiCameraFrameSize: options.frameSize,
                     wifiCameraJpegQuality: options.jpegQuality,
-                    wifiCameraHorizontalFlip: options.horizontalFlip
+                    wifiCameraHorizontalFlip: options.horizontalFlip,
+                    wifiCameraVerticalFlip: options.verticalFlip
                   });
                 }
               }}
