@@ -1,10 +1,7 @@
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
-const BLUETOOTH_HELPER = '/usr/local/sbin/round-carplay-bluetooth'
-const ADDRESS_PATTERN = /^[0-9A-F]{2}(?::[0-9A-F]{2}){5}$/i
 
 export type BluetoothDevice = {
   address: string
@@ -25,140 +22,62 @@ export type BluetoothActionResult = BluetoothSnapshot & {
   message: string
 }
 
-/** BlueZ bridge for discovery and basic pair/connect controls. */
+/** Lockout for the Pi radio retained behind the former Bluetooth API shape. */
 export class BluetoothService {
+  constructor() {
+    // CarPlay is display-only: the phone owns the Bluetooth audio connection
+    // to the car. Keep the Pi controller off even on devices installed before
+    // the kiosk installer began masking bluetooth.service.
+    if (process.platform === 'linux') void disableLocalBluetooth()
+  }
+
   async scan(): Promise<BluetoothSnapshot> {
-    if (process.platform !== 'linux') {
-      return { available: false, devices: [], error: 'Bluetooth is available on Raspberry Pi OS' }
-    }
-
-    try {
-      this.requireHelper()
-      return { available: true, devices: await this.listDevices(true) }
-    } catch (error) {
-      return { available: false, devices: [], error: commandErrorMessage(error) }
-    }
+    return { available: false, devices: [], error: 'Pi Bluetooth is disabled (display-only mode)' }
   }
 
-  connect(address: string): Promise<BluetoothActionResult> {
-    return this.runAction('connect', address)
+  connect(_address: string): Promise<BluetoothActionResult> {
+    return Promise.resolve(disabledAction())
   }
 
-  disconnect(address: string): Promise<BluetoothActionResult> {
-    return this.runAction('disconnect', address)
+  disconnect(_address: string): Promise<BluetoothActionResult> {
+    return Promise.resolve(disabledAction())
   }
 
-  private async runAction(
-    action: 'connect' | 'disconnect',
-    address: string
-  ): Promise<BluetoothActionResult> {
-    const normalized = address.trim().toUpperCase()
-    if (!ADDRESS_PATTERN.test(normalized)) {
-      return { ok: false, available: true, devices: [], message: 'Invalid Bluetooth address' }
-    }
-    if (process.platform !== 'linux') {
-      return {
-        ok: false,
-        available: false,
-        devices: [],
-        message: 'Bluetooth is available on Raspberry Pi OS'
-      }
-    }
-
-    try {
-      this.requireHelper()
-      await runHelper([action, normalized], action === 'connect' ? 55_000 : 20_000)
-      return {
-        ok: true,
-        available: true,
-        devices: await this.listDevices(false),
-        message: action === 'connect' ? 'Bluetooth device connected' : 'Bluetooth device disconnected'
-      }
-    } catch (error) {
-      let devices: BluetoothDevice[] = []
-      try {
-        devices = await this.listDevices(false)
-      } catch {
-        // Keep the original action error.
-      }
-      return {
-        ok: false,
-        available: true,
-        devices,
-        message: commandErrorMessage(error)
-      }
-    }
-  }
-
-  private async listDevices(activeScan: boolean): Promise<BluetoothDevice[]> {
-    const { stdout } = await runHelper([activeScan ? 'scan' : 'list'], activeScan ? 25_000 : 10_000)
-    const listed = parseDeviceList(stdout)
-    const devices: BluetoothDevice[] = []
-
-    for (const device of listed) {
-      try {
-        const detail = await runHelper(['info', device.address], 10_000)
-        devices.push(parseDeviceInfo(detail.stdout, device))
-      } catch {
-        devices.push({ ...device, paired: false, trusted: false, connected: false })
-      }
-    }
-
-    return devices.sort(
-      (a, b) => Number(b.connected) - Number(a.connected) ||
-        Number(b.paired) - Number(a.paired) ||
-        a.name.localeCompare(b.name)
-    )
-  }
-
-  private requireHelper(): void {
-    if (!existsSync(BLUETOOTH_HELPER)) {
-      throw new Error('Bluetooth helper is not installed; rerun the kiosk installer')
-    }
-  }
 }
 
-export function parseDeviceList(output: string): Array<Pick<BluetoothDevice, 'address' | 'name'>> {
-  const devices = new Map<string, Pick<BluetoothDevice, 'address' | 'name'>>()
-  for (const line of output.split(/\r?\n/)) {
-    const match = line.match(/^Device\s+([0-9A-F]{2}(?::[0-9A-F]{2}){5})\s+(.+)$/i)
-    if (!match) continue
-    const address = match[1].toUpperCase()
-    devices.set(address, { address, name: match[2].trim() || address })
-  }
-  return [...devices.values()]
-}
-
-function parseDeviceInfo(
-  output: string,
-  fallback: Pick<BluetoothDevice, 'address' | 'name'>
-): BluetoothDevice {
-  const value = (key: string): string | undefined =>
-    output.match(new RegExp(`^\\s*${key}:\\s*(.+)$`, 'mi'))?.[1]?.trim()
-
+function disabledAction(): BluetoothActionResult {
   return {
-    address: fallback.address,
-    name: value('Name') || value('Alias') || fallback.name,
-    paired: value('Paired') === 'yes',
-    trusted: value('Trusted') === 'yes',
-    connected: value('Connected') === 'yes'
+    ok: false,
+    available: false,
+    devices: [],
+    message: 'Pi Bluetooth is disabled; connect the phone directly to the car radio'
   }
 }
 
-function runHelper(args: string[], timeout: number): Promise<{ stdout: string; stderr: string }> {
-  return execFileAsync('sudo', ['-n', BLUETOOTH_HELPER, ...args], {
-    encoding: 'utf8',
-    timeout,
-    maxBuffer: 512 * 1024,
-    env: { ...process.env, LC_ALL: 'C' }
-  })
-}
-
-function commandErrorMessage(error: unknown): string {
-  if (typeof error === 'object' && error) {
-    const candidate = error as { stderr?: string; message?: string }
-    const message = candidate.stderr?.trim() || candidate.message?.trim()
-    if (message) return message.replace(/^Error:\s*/i, '')
+async function disableLocalBluetooth(): Promise<void> {
+  // Powering the controller off disconnects any remembered car radio and
+  // prevents BlueZ from auto-connecting it. These commands are best-effort so
+  // non-Pi Linux development environments still start normally.
+  for (const args of [
+    ['discoverable', 'off'],
+    ['pairable', 'off'],
+    ['power', 'off']
+  ]) {
+    try {
+      await execFileAsync('bluetoothctl', args, {
+        encoding: 'utf8', timeout: 5_000, maxBuffer: 64 * 1024
+      })
+    } catch {
+      // The installer also masks BlueZ and rfkill-blocks the controller.
+    }
   }
-  return String(error)
+
+  try {
+    await execFileAsync('rfkill', ['block', 'bluetooth'], {
+      encoding: 'utf8', timeout: 5_000, maxBuffer: 64 * 1024
+    })
+  } catch {
+    // rfkill normally needs root; bluetoothctl power-off above is sufficient
+    // for an existing device until the installer is rerun.
+  }
 }

@@ -48,9 +48,27 @@ const oldCurrent = symlinkTarget(currentLink)
 if (oldCurrent && existsSync(oldCurrent)) replaceSymlink(previousLink, oldCurrent)
 replaceSymlink(currentLink, release)
 pruneReleases(releases, new Set([release, oldCurrent].filter(Boolean)))
+disableLocalBluetooth()
 
 console.log(`Installed browser release ${releaseName}`)
 console.log(`Current: ${currentLink} -> ${release}`)
+
+function disableLocalBluetooth() {
+  if (process.platform !== 'linux') return
+  for (const [command, args] of [
+    ['bluetoothctl', ['discoverable', 'off']],
+    ['bluetoothctl', ['pairable', 'off']],
+    ['bluetoothctl', ['power', 'off']],
+    ['rfkill', ['block', 'bluetooth']]
+  ]) {
+    try {
+      execFileSync(command, args, { stdio: 'ignore', timeout: 5_000 })
+    } catch {
+      // A browser update runs without root. Startup repeats the controller
+      // power-off, while a full installer run applies the permanent rfkill.
+    }
+  }
+}
 
 function replaceSymlink(linkPath, targetPath) {
   mkdirSync(dirname(linkPath), { recursive: true })

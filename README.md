@@ -85,6 +85,11 @@ with the car stereo for music, navigation, calls, and Siri audio. If the stereo
 was previously paired with the Pi, remove that pairing so it cannot compete
 with the phone's Bluetooth connection.
 
+The kiosk powers off the Raspberry Pi Bluetooth controller at application
+startup. A full kiosk installer run additionally stops and masks BlueZ and
+rfkill-blocks the Pi radio. This does not disable the Carlinkit adapter's own
+wireless CarPlay radio because the adapter is separate USB hardware.
+
 ## Installation (Raspberry Pi OS)
 
 ```bash
