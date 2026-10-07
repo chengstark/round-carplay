@@ -55,16 +55,6 @@ function installBrowserApi(): void {
       onUpdate: (callback) =>
         addListener(socket, 'settings', (settings) => callback(undefined, settings))
     },
-    wifiCamera: {
-      start: (options) => rpc(socket, 'wifiCamera.start', options),
-      configure: (options) => rpc(socket, 'wifiCamera.configure', options),
-      stop: () => rpc(socket, 'wifiCamera.stop'),
-      acknowledgeFrame: () => void rpc(socket, 'wifiCamera.acknowledgeFrame'),
-      onFrame: (callback) =>
-        addListener(socket, 'wifi-camera-frame', (frame) => callback(toUint8Array(frame))),
-      onStatus: (callback) => addListener(socket, 'wifi-camera-status', callback),
-      onDiagnostics: (callback) => addListener(socket, 'wifi-camera-diagnostics', callback)
-    },
     gps: {
       getState: () => rpc(socket, 'gps.getState'),
       onState: (callback) => addListener(socket, 'gps-state', callback)

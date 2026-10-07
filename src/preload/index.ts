@@ -12,11 +12,6 @@ import type {
   SystemRebootResult,
   SystemUpdateStatus
 } from '../main/update/SystemUpdateService'
-import type { WifiCameraOptions } from '../main/Globals'
-import type {
-  WifiCameraDiagnostics,
-  WifiCameraStartResult
-} from '../main/wifi/WifiCameraService'
 import type { RuntimeSwitchResult, RuntimeSwitchStatus } from '../main/runtime/RuntimeSwitchService'
 import type { ApiCallback, CarplayApi } from '../shared/carplayApiTypes'
 
@@ -72,37 +67,6 @@ export const api: CarplayApi = {
     get: () => ipcRenderer.invoke('getSettings'),
     save: (settings: ExtraConfig) => ipcRenderer.invoke('save-settings', settings),
     onUpdate: (callback: ApiCallback<ExtraConfig>) => ipcRenderer.on('settings', callback)
-  },
-
-  wifiCamera: {
-    start: (options: WifiCameraOptions): Promise<WifiCameraStartResult> =>
-      ipcRenderer.invoke('wifi-camera-start', options),
-    configure: (options: WifiCameraOptions): Promise<WifiCameraStartResult> =>
-      ipcRenderer.invoke('wifi-camera-configure', options),
-    stop: () => ipcRenderer.invoke('wifi-camera-stop'),
-    acknowledgeFrame: () => ipcRenderer.send('wifi-camera-frame-ack'),
-    onFrame: (callback: (frame: Uint8Array) => void) => {
-      const listener = (_event: IpcRendererEvent, frame: Uint8Array) => callback(frame)
-      ipcRenderer.on('wifi-camera-frame', listener)
-      return () => ipcRenderer.removeListener('wifi-camera-frame', listener)
-    },
-    onStatus: (
-      callback: (status: {
-        state: 'connecting' | 'streaming' | 'error' | 'stopped'
-        message: string
-      }) => void
-    ) => {
-      const listener = (_event: IpcRendererEvent, status: any) => callback(status)
-      ipcRenderer.on('wifi-camera-status', listener)
-      return () => ipcRenderer.removeListener('wifi-camera-status', listener)
-    },
-    onDiagnostics: (callback: (diagnostics: WifiCameraDiagnostics) => void) => {
-      const listener = (_event: IpcRendererEvent, diagnostics: WifiCameraDiagnostics) => {
-        callback(diagnostics)
-      }
-      ipcRenderer.on('wifi-camera-diagnostics', listener)
-      return () => ipcRenderer.removeListener('wifi-camera-diagnostics', listener)
-    }
   },
 
   gps: {

@@ -45,7 +45,7 @@ export class OtaUpdateService {
   private readonly releaseRoot: string
   private readonly versionFile: string
 
-  constructor(private readonly cameraActive: () => boolean) {
+  constructor() {
     this.manifestUrl = readManifestUrl()
     this.releaseRoot = resolve(
       process.env.ROUND_CARPLAY_RELEASE_ROOT || join(homedir(), '.local', 'share', 'round-carplay')
@@ -64,10 +64,6 @@ export class OtaUpdateService {
   async update(listener: Listener): Promise<SystemUpdateStatus> {
     if (this.running) return this.getStatus()
     if (!this.manifestUrl) return this.publish('error', 'OTA manifest is not configured', listener)
-    if (this.cameraActive()) {
-      return this.publish('error', 'Close the backup camera before downloading an update', listener)
-    }
-
     this.running = true
     const staging = join(tmpdir(), `round-carplay-ota-${process.pid}`)
     rmSync(staging, { recursive: true, force: true })

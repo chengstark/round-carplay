@@ -63,8 +63,8 @@ for every class.
 
 Updating the inactive runtime is allowed and preferred. Updating the active runtime stages the
 artifact and activates it on restart. A browser UI-only update switches the versioned `current`
-symlink and normally does not restart the hardware backend. No update may interrupt an active
-backup-camera session.
+symlink and normally does not restart the hardware backend. The USB camera is browser-local and
+does not participate in backend update transport.
 
 The current Git-pull-and-build Electron updater remains available during the migration, but the
 final OTA path consumes versioned release manifests instead of compiling on the Pi.
@@ -93,15 +93,15 @@ final OTA path consumes versioned release manifests instead of compiling on the 
 4. Unified OTA manifest: stage and update Electron, backend, UI, and coordinator independently with
    checksums and rollback.
 5. Pi acceptance: test offline boot, failed browser boot rollback, repeated switching, power loss
-   during updates, camera Wi-Fi transitions, and CarPlay media latency before making browser kiosk
+   during updates, USB camera reconnects, and CarPlay media latency before making browser kiosk
    the default.
 
 ## Implementation status
 
 - Complete: transport-neutral hardware event sinks and shared browser/Electron API contract.
 - Complete: standalone loopback backend, static UI server, validated RPC payloads, and bounded/drop
-  behavior for latency-sensitive video and camera events.
-- Complete: browser adapter, settings persistence, camera acknowledgements, CarPlay input/media,
+  behavior for latency-sensitive video events.
+- Complete: browser adapter, settings persistence, browser-native USB camera capture, CarPlay input/media,
   networking, GPS, system controls, and inverse runtime switch button.
 - Complete: atomic browser release installer, Chromium/Cage units, distinct Electron/browser units,
   fixed-command runtime coordinator, restricted sudo rules, and console recovery.

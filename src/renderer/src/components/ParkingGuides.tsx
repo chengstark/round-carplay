@@ -11,7 +11,7 @@ const GUIDE_SEGMENTS = [
 ] as const
 
 /**
- * Fixed parking guides shared by the USB and Wi-Fi backup-camera views.
+ * Fixed parking guides shared by the USB backup-camera views.
  * These are visual distance references only; they intentionally do not move
  * with steering input. The viewBox keeps the geometry proportional at every
  * display size while pointer-events:none leaves camera controls tappable.

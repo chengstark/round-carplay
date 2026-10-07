@@ -1,4 +1,4 @@
-import { ExtraConfig, WifiCameraFrameSize, WIFI_CAMERA_RESOLUTIONS } from "../../../main/Globals"
+import { CAMERA_RESOLUTIONS, CameraResolution, ExtraConfig } from "../../../main/Globals"
 import React, { useEffect, useMemo, useState } from "react"
 import {
   Box,
@@ -70,7 +70,7 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
     const updated = { ...activeSettings, [key]: value }
     setActiveSettings(updated)
 
-    if (['wifiCameraRotation', 'wifiCameraJpegQuality'].includes(key)) {
+    if (key === 'cameraRotation') {
       debouncedSave(updated)
     } else if (['kiosk', 'nightMode'].includes(key)) {
       saveSettings(updated)
@@ -127,7 +127,15 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
         detectCameras(setCameraFound, saveSettings, activeSettings).then(setCameras)
       }
     }
+    const cameraHandler = () => {
+      detectCameras(setCameraFound, saveSettings, activeSettings).then(setCameras)
+    }
     window.carplay.usb.listenForEvents(usbHandler)
+    navigator.mediaDevices.addEventListener('devicechange', cameraHandler)
+    return () => {
+      window.carplay.usb.unlistenForEvents(usbHandler)
+      navigator.mediaDevices.removeEventListener('devicechange', cameraHandler)
+    }
   }, [])
 
 
@@ -208,10 +216,10 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
 
           <Grid size={{ xs: 6 }} sx={{ minWidth: 280, mx: 2 }}>
             <FormControl fullWidth>
-              <FormLabel>WI-FI CAMERA ROTATION</FormLabel>
+              <FormLabel>USB CAMERA ROTATION</FormLabel>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Slider
-                  value={activeSettings.wifiCameraRotation}
+                  value={activeSettings.cameraRotation}
                   min={0}
                   max={359}
                   step={1}
@@ -225,17 +233,17 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
                   valueLabelDisplay="auto"
                   valueLabelFormat={value => `${value}°`}
                   onChange={(_, value) => {
-                    if (typeof value === 'number') settingsChange('wifiCameraRotation', value)
+                    if (typeof value === 'number') settingsChange('cameraRotation', value)
                   }}
                 />
                 <TextField
                   label="DEGREES"
                   type="number"
-                  value={activeSettings.wifiCameraRotation}
+                  value={activeSettings.cameraRotation}
                   inputProps={{ min: 0, max: 359, step: 1 }}
                   onChange={event => {
                     const value = Math.min(359, Math.max(0, Math.round(Number(event.target.value))))
-                    settingsChange('wifiCameraRotation', value)
+                    settingsChange('cameraRotation', value)
                   }}
                   sx={{ width: 110, flexShrink: 0 }}
                 />
@@ -244,26 +252,16 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
           </Grid>
 
           <Grid size={{ xs: 3 }} sx={{ minWidth: 180, mx: 2 }}>
-            <TextField
-              label="E-EYE CAMERA ADDRESS"
-              fullWidth
-              value={activeSettings.wifiCameraHost}
-              onChange={event => settingsChange('wifiCameraHost', event.target.value)}
-              helperText="Default: 192.168.10.1"
-            />
-          </Grid>
-
-          <Grid size={{ xs: 3 }} sx={{ minWidth: 180, mx: 2 }}>
             <FormControl fullWidth>
-              <FormLabel>WI-FI CAMERA RESOLUTION</FormLabel>
+              <FormLabel>USB CAMERA RESOLUTION</FormLabel>
               <Select
-                value={activeSettings.wifiCameraFrameSize}
+                value={activeSettings.cameraResolution}
                 onChange={event => settingsChange(
-                  'wifiCameraFrameSize',
-                  Number(event.target.value) as WifiCameraFrameSize
+                  'cameraResolution',
+                  event.target.value as CameraResolution
                 )}
               >
-                {WIFI_CAMERA_RESOLUTIONS.map(resolution => (
+                {CAMERA_RESOLUTIONS.map(resolution => (
                   <MenuItem key={resolution.value} value={resolution.value}>
                     {resolution.label}
                   </MenuItem>
@@ -272,30 +270,24 @@ const Settings: React.FC<SettingsProps> = ({ settings }) => {
             </FormControl>
           </Grid>
 
-          <Grid size={{ xs: 3 }} sx={{ minWidth: 220, mx: 2, display: 'flex', alignItems: 'center' }}>
-            <Typography variant="caption" color="text.secondary">
-              E-Eye sends H.265 at 25 FPS. VGA 640×480 is the validated mode.
-            </Typography>
-          </Grid>
-
           <Grid size={{ xs: 3 }} sx={{ minWidth: 220, mx: 2 }}>
             <FormControlLabel
               control={(
                 <Checkbox
-                  checked={activeSettings.wifiCameraHorizontalFlip}
-                  onChange={event => settingsChange('wifiCameraHorizontalFlip', event.target.checked)}
+                  checked={activeSettings.cameraHorizontalFlip}
+                  onChange={event => settingsChange('cameraHorizontalFlip', event.target.checked)}
                 />
               )}
-              label="WI-FI CAMERA HORIZONTAL FLIP"
+              label="USB CAMERA HORIZONTAL FLIP"
             />
             <FormControlLabel
               control={(
                 <Checkbox
-                  checked={activeSettings.wifiCameraVerticalFlip}
-                  onChange={event => settingsChange('wifiCameraVerticalFlip', event.target.checked)}
+                  checked={activeSettings.cameraVerticalFlip}
+                  onChange={event => settingsChange('cameraVerticalFlip', event.target.checked)}
                 />
               )}
-              label="WI-FI CAMERA VERTICAL FLIP"
+              label="USB CAMERA VERTICAL FLIP"
             />
           </Grid>
 

@@ -1,4 +1,4 @@
-import type { ExtraConfig, WifiCameraOptions } from '../main/Globals'
+import type { ExtraConfig } from '../main/Globals'
 import type { GpsState } from '../main/gps/GpsService'
 import type {
   BluetoothActionResult,
@@ -15,7 +15,6 @@ import type {
   SystemRebootResult,
   SystemUpdateStatus
 } from '../main/update/SystemUpdateService'
-import type { WifiCameraDiagnostics, WifiCameraStartResult } from '../main/wifi/WifiCameraService'
 
 export type ApiCallback<T = unknown> = (event: unknown, ...args: T[]) => void
 export type RemoveListener = () => void
@@ -51,20 +50,6 @@ export interface CarplayApi {
     get(): Promise<ExtraConfig>
     save(settings: ExtraConfig): Promise<unknown>
     onUpdate(callback: ApiCallback<ExtraConfig>): unknown
-  }
-  wifiCamera: {
-    start(options: WifiCameraOptions): Promise<WifiCameraStartResult>
-    configure(options: WifiCameraOptions): Promise<WifiCameraStartResult>
-    stop(): Promise<unknown>
-    acknowledgeFrame(): void
-    onFrame(callback: (frame: Uint8Array) => void): RemoveListener
-    onStatus(
-      callback: (status: {
-        state: 'connecting' | 'streaming' | 'error' | 'stopped'
-        message: string
-      }) => void
-    ): RemoveListener
-    onDiagnostics(callback: (diagnostics: WifiCameraDiagnostics) => void): RemoveListener
   }
   gps: {
     getState(): Promise<GpsState>

@@ -1,7 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { DEFAULT_CONFIG } from '../main/carplay/messages'
-import type { ExtraConfig, KeyBindings, WifiCameraFrameSize } from '../main/Globals'
+import {
+  CAMERA_RESOLUTIONS,
+  type CameraResolution,
+  type ExtraConfig,
+  type KeyBindings
+} from '../main/Globals'
 
 const DEFAULT_BINDINGS: KeyBindings = {
   up: 'ArrowUp',
@@ -37,7 +42,7 @@ export class ConfigStore {
   }
 
   private read(): ExtraConfig {
-    let stored: Partial<ExtraConfig> = {}
+    let stored: Partial<ExtraConfig> & LegacyCameraConfig = {}
     if (existsSync(this.path)) {
       try {
         stored = JSON.parse(readFileSync(this.path, 'utf8')) as Partial<ExtraConfig>
@@ -54,22 +59,38 @@ export class ConfigStore {
   }
 }
 
-function normalizeConfig(value: Partial<ExtraConfig>): ExtraConfig {
+type LegacyCameraConfig = {
+  wifiCameraRotation?: unknown
+  wifiCameraFrameSize?: unknown
+  wifiCameraHorizontalFlip?: unknown
+  wifiCameraVerticalFlip?: unknown
+  wifiCameraHost?: unknown
+  wifiCameraJpegQuality?: unknown
+}
+
+function normalizeConfig(value: Partial<ExtraConfig> & LegacyCameraConfig): ExtraConfig {
+  const {
+    wifiCameraRotation,
+    wifiCameraFrameSize,
+    wifiCameraHorizontalFlip,
+    wifiCameraVerticalFlip,
+    wifiCameraHost: _wifiCameraHost,
+    wifiCameraJpegQuality: _wifiCameraJpegQuality,
+    ...current
+  } = value
   const merged = {
     ...DEFAULT_CONFIG,
     kiosk: true,
     camera: '',
     backgroundColor: '#000000',
-    wifiCameraRotation: 0,
-    wifiCameraHost: '192.168.10.1',
-    wifiCameraFrameSize: 8,
-    wifiCameraJpegQuality: 20,
-    wifiCameraHorizontalFlip: false,
-    wifiCameraVerticalFlip: false,
+    cameraRotation: normalizeRotation(wifiCameraRotation),
+    cameraResolution: migrateLegacyResolution(wifiCameraFrameSize),
+    cameraHorizontalFlip: wifiCameraHorizontalFlip === true,
+    cameraVerticalFlip: wifiCameraVerticalFlip === true,
     gpsSmoothing: 0.55,
     nightMode: true,
-    ...value,
-    bindings: { ...DEFAULT_BINDINGS, ...(value.bindings ?? {}) }
+    ...current,
+    bindings: { ...DEFAULT_BINDINGS, ...(current.bindings ?? {}) }
   } as ExtraConfig
 
   merged.width = finiteNumber(merged.width, 800)
@@ -79,20 +100,10 @@ function normalizeConfig(value: Partial<ExtraConfig>): ExtraConfig {
   merged.backgroundColor = /^#[0-9a-f]{6}$/i.test(merged.backgroundColor)
     ? merged.backgroundColor
     : '#000000'
-  merged.wifiCameraRotation = ((finiteNumber(merged.wifiCameraRotation, 0) % 360) + 360) % 360
-  merged.wifiCameraHost = normalizeHost(merged.wifiCameraHost)
-  merged.wifiCameraFrameSize = normalizeFrameSize(merged.wifiCameraFrameSize)
-  // Migrate the former XIAO defaults without requiring a config reset.
-  if (merged.wifiCameraHost === '192.168.4.1') {
-    merged.wifiCameraHost = '192.168.10.1'
-    if (merged.wifiCameraFrameSize === 11) merged.wifiCameraFrameSize = 8
-  }
-  merged.wifiCameraJpegQuality = Math.min(
-    63,
-    Math.max(4, Math.round(finiteNumber(merged.wifiCameraJpegQuality, 20)))
-  )
-  merged.wifiCameraHorizontalFlip = merged.wifiCameraHorizontalFlip === true
-  merged.wifiCameraVerticalFlip = merged.wifiCameraVerticalFlip === true
+  merged.cameraRotation = normalizeRotation(merged.cameraRotation)
+  merged.cameraResolution = normalizeResolution(merged.cameraResolution)
+  merged.cameraHorizontalFlip = merged.cameraHorizontalFlip === true
+  merged.cameraVerticalFlip = merged.cameraVerticalFlip === true
   merged.gpsSmoothing = Math.min(0.9, Math.max(0, finiteNumber(merged.gpsSmoothing, 0.55)))
   // This runtime is a CarPlay display/controller only. Persist the direct
   // phone-to-car audio route even when migrating an older saved config.
@@ -110,17 +121,21 @@ function finiteNumber(value: unknown, fallback: number): number {
   return Number.isFinite(number) ? number : fallback
 }
 
-function normalizeHost(value: unknown): string {
-  const candidate = String(value ?? '').trim()
-  if (!candidate) return '192.168.10.1'
-  try {
-    return new URL(candidate.includes('://') ? candidate : `http://${candidate}`).hostname
-  } catch {
-    return '192.168.10.1'
-  }
+function normalizeRotation(value: unknown): number {
+  return ((finiteNumber(value, 0) % 360) + 360) % 360
 }
 
-function normalizeFrameSize(value: unknown): WifiCameraFrameSize {
-  const frameSize = Number(value)
-  return [5, 8, 9, 10, 11].includes(frameSize) ? (frameSize as WifiCameraFrameSize) : 8
+function normalizeResolution(value: unknown): CameraResolution {
+  const resolution = String(value ?? '') as CameraResolution
+  return CAMERA_RESOLUTIONS.some(option => option.value === resolution) ? resolution : '1280x720'
+}
+
+function migrateLegacyResolution(value: unknown): CameraResolution {
+  return ({
+    11: '1280x720',
+    10: '1024x768',
+    9: '800x600',
+    8: '640x480',
+    5: '320x240'
+  } as Record<number, CameraResolution>)[Number(value)] ?? '1280x720'
 }

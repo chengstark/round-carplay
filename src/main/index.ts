@@ -4,11 +4,10 @@ import { existsSync, createReadStream, readFileSync, writeFileSync } from 'fs'
 import { electronApp, is } from '@electron-toolkit/utils'
 import { DEFAULT_CONFIG } from '@carplay/node'
 import { Socket } from './Socket'
-import { ExtraConfig, KeyBindings, WifiCameraFrameSize, WIFI_CAMERA_RESOLUTIONS } from './Globals'
+import { CameraResolution, CAMERA_RESOLUTIONS, ExtraConfig, KeyBindings } from './Globals'
 import { USBService } from './usb/USBService'
 import { CarplayService } from './carplay/CarplayService'
 import { BluetoothService } from './bluetooth/BluetoothService'
-import { WifiCameraService } from './wifi/WifiCameraService'
 import { GpsService } from './gps/GpsService'
 import { NetworkService } from './network/NetworkService'
 import { SystemUpdateService } from './update/SystemUpdateService'
@@ -104,12 +103,11 @@ const electronEvents: ServiceEventSink = {
   }
 }
 const carplayService = new CarplayService(electronEvents, appPath)
-const wifiCameraService = new WifiCameraService(electronEvents)
 const gpsService = new GpsService(undefined, electronEvents)
 const networkService = new NetworkService()
 const bluetoothService = new BluetoothService()
 const systemUpdateService = new SystemUpdateService()
-const otaUpdateService = new OtaUpdateService(() => wifiCameraService.isActive())
+const otaUpdateService = new OtaUpdateService()
 const runtimeSwitchService = new RuntimeSwitchService()
 ;(global as any).carplayService = carplayService
 
@@ -119,7 +117,6 @@ app.on('before-quit', async (e) => {
   e.preventDefault()
   try {
     carplayService.prepareForShutdown()
-    wifiCameraService.stop()
     gpsService.stop()
     await carplayService.stop()
     await usbService?.forceReset()
@@ -161,39 +158,53 @@ const DEFAULT_BINDINGS: KeyBindings = {
 }
 
 function loadConfig(): ExtraConfig {
-  let fileConfig: Partial<ExtraConfig> = {}
+  type LegacyCameraConfig = {
+    wifiCameraRotation?: unknown
+    wifiCameraFrameSize?: unknown
+    wifiCameraHorizontalFlip?: unknown
+    wifiCameraVerticalFlip?: unknown
+    wifiCameraHost?: unknown
+    wifiCameraJpegQuality?: unknown
+  }
+  let fileConfig: Partial<ExtraConfig> & LegacyCameraConfig = {}
   if (existsSync(configPath)) {
     fileConfig = JSON.parse(readFileSync(configPath, 'utf8'))
   }
+
+  const {
+    wifiCameraRotation,
+    wifiCameraFrameSize,
+    wifiCameraHorizontalFlip,
+    wifiCameraVerticalFlip,
+    wifiCameraHost: _wifiCameraHost,
+    wifiCameraJpegQuality: _wifiCameraJpegQuality,
+    ...currentFileConfig
+  } = fileConfig
 
   const merged: ExtraConfig = {
     ...DEFAULT_CONFIG,
     kiosk: true,
     camera: '',
     backgroundColor: '#000000',
-    wifiCameraRotation: 0,
-    wifiCameraHost: '192.168.10.1',
-    wifiCameraFrameSize: 8,
-    wifiCameraJpegQuality: 20,
-    wifiCameraHorizontalFlip: false,
-    wifiCameraVerticalFlip: false,
+    cameraRotation: normalizeCameraRotation(wifiCameraRotation),
+    cameraResolution: migrateLegacyCameraResolution(wifiCameraFrameSize),
+    cameraHorizontalFlip: wifiCameraHorizontalFlip === true,
+    cameraVerticalFlip: wifiCameraVerticalFlip === true,
     gpsSmoothing: 0.55,
     nightMode: true,
     bindings: { ...DEFAULT_BINDINGS },
-    ...fileConfig
+    ...currentFileConfig
   } as ExtraConfig
 
   merged.bindings = {
     ...DEFAULT_BINDINGS,
-    ...(fileConfig.bindings || {})
+    ...(currentFileConfig.bindings || {})
   }
   merged.backgroundColor = normalizeBackgroundColor(merged.backgroundColor)
-  merged.wifiCameraRotation = normalizeWifiCameraRotation(merged.wifiCameraRotation)
-  merged.wifiCameraHost = normalizeWifiCameraHost(merged.wifiCameraHost)
-  merged.wifiCameraFrameSize = normalizeWifiCameraFrameSize(merged.wifiCameraFrameSize)
-  merged.wifiCameraJpegQuality = normalizeWifiCameraJpegQuality(merged.wifiCameraJpegQuality)
-  merged.wifiCameraHorizontalFlip = normalizeWifiCameraHorizontalFlip(merged.wifiCameraHorizontalFlip)
-  merged.wifiCameraVerticalFlip = normalizeWifiCameraVerticalFlip(merged.wifiCameraVerticalFlip)
+  merged.cameraRotation = normalizeCameraRotation(merged.cameraRotation)
+  merged.cameraResolution = normalizeCameraResolution(merged.cameraResolution)
+  merged.cameraHorizontalFlip = normalizeCameraFlip(merged.cameraHorizontalFlip)
+  merged.cameraVerticalFlip = normalizeCameraFlip(merged.cameraVerticalFlip)
   merged.gpsSmoothing = normalizeGpsSmoothing(merged.gpsSmoothing)
   merged.audioTransferMode = true
   delete (merged as unknown as Record<string, unknown>).audioVolume
@@ -365,20 +376,6 @@ app.whenReady().then(() => {
   ipcMain.handle('usb-last-event', () => usbService.getLastEvent())
   ipcMain.handle('getSettings', () => config)
   ipcMain.handle('save-settings', (_event, settings: ExtraConfig) => saveSettings(settings))
-  ipcMain.handle('wifi-camera-start', async (_event, options) => {
-    const connection = await networkService.connectCameraWifi()
-    if (!connection.ok) {
-      console.warn(`[WifiCamera] Camera Wi-Fi connection failed: ${connection.message}`)
-      return { ok: false, error: connection.message }
-    }
-    return wifiCameraService.start(options)
-  })
-  ipcMain.handle('wifi-camera-configure', (_event, options) => wifiCameraService.configure(options))
-  ipcMain.handle('wifi-camera-stop', () => {
-    wifiCameraService.stop()
-    return { ok: true, message: 'Camera stopped; camera Wi-Fi kept active for fast reopening' }
-  })
-  ipcMain.on('wifi-camera-frame-ack', () => wifiCameraService.acknowledgeFrame())
   ipcMain.handle('gps-get-state', () => gpsService.getState())
   ipcMain.handle('network-scan-wifi', () => networkService.scanWifi())
   ipcMain.handle('network-connect-wifi', (_event, ssid: string, password: string) =>
@@ -446,12 +443,10 @@ function saveSettings(settings: ExtraConfig) {
         packetMax: +settings.packetMax,
         mediaDelay: +settings.mediaDelay,
         backgroundColor: normalizeBackgroundColor(settings.backgroundColor),
-        wifiCameraRotation: normalizeWifiCameraRotation(settings.wifiCameraRotation),
-        wifiCameraHost: normalizeWifiCameraHost(settings.wifiCameraHost),
-        wifiCameraFrameSize: normalizeWifiCameraFrameSize(settings.wifiCameraFrameSize),
-        wifiCameraJpegQuality: normalizeWifiCameraJpegQuality(settings.wifiCameraJpegQuality),
-        wifiCameraHorizontalFlip: normalizeWifiCameraHorizontalFlip(settings.wifiCameraHorizontalFlip),
-        wifiCameraVerticalFlip: normalizeWifiCameraVerticalFlip(settings.wifiCameraVerticalFlip),
+        cameraRotation: normalizeCameraRotation(settings.cameraRotation),
+        cameraResolution: normalizeCameraResolution(settings.cameraResolution),
+        cameraHorizontalFlip: normalizeCameraFlip(settings.cameraHorizontalFlip),
+        cameraVerticalFlip: normalizeCameraFlip(settings.cameraVerticalFlip),
         gpsSmoothing: normalizeGpsSmoothing(settings.gpsSmoothing),
         audioTransferMode: true
       },
@@ -480,41 +475,28 @@ function saveSettings(settings: ExtraConfig) {
   return config
 }
 
-function normalizeWifiCameraRotation(value: unknown): number {
+function normalizeCameraRotation(value: unknown): number {
   const rotation = Number(value)
   if (!Number.isFinite(rotation)) return 0
   return ((rotation % 360) + 360) % 360
 }
 
-function normalizeWifiCameraHost(value: unknown): string {
-  const candidate = String(value ?? '').trim()
-  if (!candidate) return '192.168.10.1'
-
-  try {
-    const url = new URL(candidate.includes('://') ? candidate : `http://${candidate}`)
-    return url.hostname || '192.168.10.1'
-  } catch {
-    return '192.168.10.1'
-  }
+function normalizeCameraResolution(value: unknown): CameraResolution {
+  const resolution = String(value ?? '') as CameraResolution
+  return CAMERA_RESOLUTIONS.some(option => option.value === resolution) ? resolution : '1280x720'
 }
 
-function normalizeWifiCameraFrameSize(value: unknown): WifiCameraFrameSize {
-  const frameSize = Number(value)
-  const supported = WIFI_CAMERA_RESOLUTIONS.some(resolution => resolution.value === frameSize)
-  return supported ? frameSize as WifiCameraFrameSize : 8
+function migrateLegacyCameraResolution(value: unknown): CameraResolution {
+  return ({
+    11: '1280x720',
+    10: '1024x768',
+    9: '800x600',
+    8: '640x480',
+    5: '320x240'
+  } as Record<number, CameraResolution>)[Number(value)] ?? '1280x720'
 }
 
-function normalizeWifiCameraJpegQuality(value: unknown): number {
-  const quality = Math.round(Number(value))
-  if (!Number.isFinite(quality)) return 20
-  return Math.min(63, Math.max(4, quality))
-}
-
-function normalizeWifiCameraHorizontalFlip(value: unknown): boolean {
-  return value === true
-}
-
-function normalizeWifiCameraVerticalFlip(value: unknown): boolean {
+function normalizeCameraFlip(value: unknown): boolean {
   return value === true
 }
 

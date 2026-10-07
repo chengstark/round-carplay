@@ -167,7 +167,7 @@ export default function CrescentButton({
   return (
     <button
       type="button"
-      aria-label={`${content === 'clock' ? 'Clock' : 'Wi-Fi camera'} — double tap to open`}
+      aria-label={`${content === 'clock' ? 'Clock' : 'USB camera'} — double tap to open`}
       onClick={onClick}
       style={{
         position: 'absolute',

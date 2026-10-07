@@ -5,7 +5,6 @@ import { extname, join, normalize, resolve, sep } from 'node:path'
 import { Server, type Socket } from 'socket.io'
 import { CarplayService } from '../main/carplay/CarplayService'
 import { BluetoothService } from '../main/bluetooth/BluetoothService'
-import type { WifiCameraOptions } from '../main/Globals'
 import type { ServiceEventSink } from '../main/events/ServiceEventSink'
 import { GpsService } from '../main/gps/GpsService'
 import { NetworkService } from '../main/network/NetworkService'
@@ -13,7 +12,6 @@ import { RuntimeSwitchService, type RuntimeKind } from '../main/runtime/RuntimeS
 import { SystemUpdateService } from '../main/update/SystemUpdateService'
 import { OtaUpdateService } from '../main/update/OtaUpdateService'
 import { USBService } from '../main/usb/USBService'
-import { WifiCameraService } from '../main/wifi/WifiCameraService'
 import { BrowserUpdateService } from './BrowserUpdateService'
 import { ConfigStore } from './ConfigStore'
 
@@ -37,27 +35,20 @@ const socketEvents: ServiceEventSink = {
     if (!io || io.engine.clientsCount === 0) return false
     // CarPlay frames must be reliable. A resolution event is emitted just
     // before the first frame, and Socket.IO may discard a subsequent volatile
-    // packet while that earlier write is still draining. The camera has its
-    // own acknowledgement/backpressure path and intentionally remains live-
-    // edge/volatile.
-    if (channel === 'wifi-camera-frame') {
-      io.volatile.emit(channel, payload)
-    } else {
-      io.emit(channel, payload)
-    }
+    // packet while that earlier write is still draining.
+    io.emit(channel, payload)
     return true
   }
 }
 
 const carplay = new CarplayService(socketEvents, dataDirectory)
 const usb = new USBService(carplay, socketEvents)
-const wifiCamera = new WifiCameraService(socketEvents)
 const gps = new GpsService(undefined, socketEvents)
 const network = new NetworkService()
 const bluetooth = new BluetoothService()
 const power = new SystemUpdateService()
 const updater = new BrowserUpdateService()
-const otaUpdater = new OtaUpdateService(() => wifiCamera.isActive())
+const otaUpdater = new OtaUpdateService()
 const runtime = new RuntimeSwitchService()
 
 gps.setSmoothing(configStore.get().gpsSmoothing)
@@ -113,23 +104,6 @@ async function handleRpc(socket: Socket, request: RpcRequest): Promise<unknown> 
       return usb.getDeviceInfo()
     case 'usb.getLastEvent':
       return usb.getLastEvent()
-    case 'wifiCamera.start': {
-      const connection = await network.connectCameraWifi()
-      if (!connection.ok) {
-        console.warn('[Backend] Camera Wi-Fi connection failed', connection.message)
-        return { ok: false, error: connection.message }
-      }
-      return wifiCamera.start(requireCameraOptions(args[0]))
-    }
-    case 'wifiCamera.configure':
-      return wifiCamera.configure(requireCameraOptions(args[0]))
-    case 'wifiCamera.stop': {
-      wifiCamera.stop()
-      return { ok: true, message: 'Camera stopped; camera Wi-Fi kept active for fast reopening' }
-    }
-    case 'wifiCamera.acknowledgeFrame':
-      wifiCamera.acknowledgeFrame()
-      return undefined
     case 'gps.getState':
       return gps.getState()
     case 'network.scanWifi':
@@ -269,11 +243,6 @@ function isLocalOrigin(origin: string | undefined): boolean {
   }
 }
 
-function requireCameraOptions(value: unknown): WifiCameraOptions {
-  if (!value || typeof value !== 'object') throw new Error('Invalid camera options')
-  return value as WifiCameraOptions
-}
-
 function requireString(value: unknown, label: string): string {
   if (typeof value !== 'string') throw new Error(`Invalid ${label}`)
   return value
@@ -319,7 +288,6 @@ function errorMessage(error: unknown): string {
 async function shutdown(signal: string): Promise<void> {
   console.log(`[Backend] ${signal}; shutting down`)
   carplay.prepareForShutdown()
-  wifiCamera.stop()
   gps.stop()
   await carplay.stop()
   await usb.stop()

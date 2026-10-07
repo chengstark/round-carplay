@@ -31,7 +31,6 @@ command -v cage >/dev/null 2>&1 || missing_packages+=(cage)
 command -v curl >/dev/null 2>&1 || missing_packages+=(curl)
 command -v node >/dev/null 2>&1 || missing_packages+=(nodejs)
 command -v npm >/dev/null 2>&1 || missing_packages+=(npm)
-command -v ffmpeg >/dev/null 2>&1 || missing_packages+=(ffmpeg)
 if test -z "$CHROMIUM"; then missing_packages+=(chromium); fi
 
 if test "${#missing_packages[@]}" -gt 0; then
@@ -61,31 +60,21 @@ ROUND_CARPLAY_RELEASE_ROOT="$RELEASE_ROOT" npm run install:browser-release
 
 sudo install -d -m 0755 "$CONFIG_DIR"
 printf '%s\n' "$USER_HOME" | sudo tee "$CONFIG_DIR/install-user-home" >/dev/null
-CAMERA_PASSWORD_FILE="$CONFIG_DIR/eeye-camera-wifi-password"
-if ! sudo test -s "$CAMERA_PASSWORD_FILE"; then
-  camera_password="${ROUND_CARPLAY_CAMERA_WIFI_PASSWORD:-}"
-  if test -z "$camera_password" && test -t 0; then
-    read -r -s -p "E-Eye camera Wi-Fi password: " camera_password
-    echo
-  fi
-  if test -z "$camera_password"; then
-    echo "Set ROUND_CARPLAY_CAMERA_WIFI_PASSWORD or run interactively to configure the camera." >&2
-    exit 1
-  fi
-  printf '%s\n' "$camera_password" | sudo tee "$CAMERA_PASSWORD_FILE" >/dev/null
-  unset camera_password
-fi
-sudo chmod 0600 "$CAMERA_PASSWORD_FILE"
 if test -n "${ROUND_CARPLAY_UPDATE_MANIFEST_URL:-}"; then
   printf '%s\n' "$ROUND_CARPLAY_UPDATE_MANIFEST_URL" | sudo tee "$CONFIG_DIR/update-manifest-url" >/dev/null
   sudo chmod 0644 "$CONFIG_DIR/update-manifest-url"
 fi
 sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-runtime" /usr/local/sbin/round-carplay-runtime
 sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-browser-fallback" /usr/local/sbin/round-carplay-browser-fallback
-sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-camera-wifi" /usr/local/sbin/round-carplay-camera-wifi
 sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-connect-wifi" /usr/local/sbin/round-carplay-connect-wifi
-sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-restore-wifi" /usr/local/sbin/round-carplay-restore-wifi
 sudo install -m 0755 "$REPOSITORY/scripts/round-carplay-scan-wifi" /usr/local/sbin/round-carplay-scan-wifi
+sudo rm -f /usr/local/sbin/round-carplay-camera-wifi
+sudo rm -f /usr/local/sbin/round-carplay-restore-wifi
+sudo rm -f "$CONFIG_DIR/eeye-camera-wifi-password"
+sudo nmcli connection delete eeye-camera >/dev/null 2>&1 || true
+
+# Chromium opens the UVC camera directly through getUserMedia.
+sudo usermod -a -G video "$INSTALL_USER"
 # The Pi must never compete with the phone for the car radio's Bluetooth audio
 # connection. This does not affect the USB Carlinkit adapter or its own radio.
 if command -v bluetoothctl >/dev/null 2>&1; then
@@ -229,7 +218,7 @@ Environment="XCURSOR_PATH=/usr/local/share/icons:/usr/share/icons"
 Environment="WLR_LIBINPUT_NO_DEVICES=1"
 Environment="NO_AT_BRIDGE=1"
 ExecStartPre=/bin/bash -c 'for attempt in {1..60}; do /usr/bin/curl --fail --silent http://127.0.0.1:$PORT/health >/dev/null && exit 0; sleep 1; done; exit 1'
-ExecStart=/usr/bin/cage -- $CHROMIUM --ozone-platform=wayland --enable-features=UseOzonePlatform,AcceleratedVideoDecodeLinuxGL,AcceleratedVideoDecodeLinuxZeroCopyGL --use-gl=angle --use-angle=gl --ignore-gpu-blocklist --enable-gpu-rasterization --autoplay-policy=no-user-gesture-required --kiosk --app=http://127.0.0.1:$PORT/ --no-first-run --disable-session-crashed-bubble --disable-infobars --disable-notifications --disable-translate --password-store=basic --user-data-dir=$USER_HOME/.config/round-carplay/chromium
+ExecStart=/usr/bin/cage -- $CHROMIUM --ozone-platform=wayland --enable-features=UseOzonePlatform,AcceleratedVideoDecodeLinuxGL,AcceleratedVideoDecodeLinuxZeroCopyGL --use-gl=angle --use-angle=gl --ignore-gpu-blocklist --enable-gpu-rasterization --autoplay-policy=no-user-gesture-required --use-fake-ui-for-media-stream --kiosk --app=http://127.0.0.1:$PORT/ --no-first-run --disable-session-crashed-bubble --disable-infobars --disable-notifications --disable-translate --password-store=basic --user-data-dir=$USER_HOME/.config/round-carplay/chromium
 ExecStartPost=+/usr/bin/chvt 1
 Restart=always
 RestartSec=2
@@ -260,9 +249,7 @@ EOF
 sudo tee /etc/sudoers.d/round-carplay-runtime >/dev/null <<EOF
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-runtime switch electron
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-runtime switch browser
-$INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-camera-wifi
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-connect-wifi
-$INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-restore-wifi
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/local/sbin/round-carplay-scan-wifi
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/systemctl reboot
 $INSTALL_USER ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff

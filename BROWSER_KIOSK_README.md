@@ -1,11 +1,11 @@
 # Browser Kiosk Runtime
 
 The `browser-kiosk` branch runs the existing React UI in Chromium while a local Node.js service
-owns CarPlay USB, audio, GPS, NetworkManager, and the E-Eye Wi-Fi camera. The API and UI bind only to
+owns CarPlay USB, audio, GPS, and NetworkManager. Chromium opens the UVC camera directly. The API and UI bind only to
 `127.0.0.1` and continue to work without internet access.
 
 This is the canonical runtime for current development. See `PROJECT_MEMORY.md`
-for the durable project assumptions and camera protocol summary.
+for the durable project assumptions.
 
 ## Local build and preview
 
@@ -54,7 +54,7 @@ ROUND_CARPLAY_UPDATE_MANIFEST_URL=https://updates.example.com/manifest.json \
 
 The same manifest is consumed by Electron and the browser backend. It can independently replace the
 Electron AppImage, full browser runtime, or UI-only bundle. Every artifact is SHA-256 verified before
-an atomic switch. An update is refused while the backup camera is active.
+an atomic switch.
 
 Create browser artifacts with:
 
@@ -69,10 +69,10 @@ checksums needed by the manifest.
 
 Before making the browser runtime the default, test on the actual Pi and round display:
 
-- cold/offline boot and missing camera hotspot;
+- cold/offline boot and missing USB camera;
 - CarPlay video, audio, microphone, touch, and USB reset/reconnect;
 - GPS state and smoothing;
-- camera Wi-Fi activation, diagnostics, frame acknowledgement, latency, and reconnection;
+- USB camera permission, selection, diagnostics, latency, and reconnect behavior;
 - repeated Electron/browser switching and console recovery;
 - backend/Chromium crash recovery and power loss during update staging;
 - Electron, full-browser, and UI-only OTA installation plus rollback.

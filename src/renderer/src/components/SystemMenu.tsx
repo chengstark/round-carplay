@@ -25,14 +25,11 @@ import type { RuntimeSwitchStatus } from '../../../main/runtime/RuntimeSwitchSer
 import type { SystemUpdateStatus } from '../../../main/update/SystemUpdateService'
 
 const BACKGROUND_PRESETS = ['#000000', '#1b1f23', '#17324d', '#556b5f', '#a0bacc', '#8b7355']
-const CAMERA_WIFI_SSID = 'backcam_aee72870'
-
 type SystemMenuProps = {
   backgroundColor: string
   onBackgroundColorChange: (color: string) => void
   gpsSmoothing: number
   onGpsSmoothingChange: (smoothing: number) => void
-  onCameraOpen: () => void
   onClose: () => void
 }
 
@@ -41,7 +38,6 @@ export default function SystemMenu({
   onBackgroundColorChange,
   gpsSmoothing,
   onGpsSmoothingChange,
-  onCameraOpen,
   onClose
 }: SystemMenuProps): React.JSX.Element {
   const [networks, setNetworks] = useState<WifiNetwork[]>([])
@@ -147,10 +143,6 @@ export default function SystemMenu({
 
   const connect = async (): Promise<void> => {
     if (!selectedNetwork) return
-    if (selectedNetwork.ssid === CAMERA_WIFI_SSID) {
-      onCameraOpen()
-      return
-    }
     setConnecting(true)
     setMessage(`Connecting to ${selectedNetwork.ssid}…`)
     try {
@@ -421,7 +413,7 @@ export default function SystemMenu({
 
       {selectedNetwork && !selectedNetwork.connected && (
         <Box sx={{ display: 'flex', gap: 0.8, mt: 0.8 }}>
-          {selectedNetwork.security && selectedNetwork.ssid !== CAMERA_WIFI_SSID && (
+          {selectedNetwork.security && (
             <TextField
               type="password"
               value={password}
@@ -441,13 +433,11 @@ export default function SystemMenu({
             size="small"
             disabled={connecting}
             onClick={connect}
-            sx={{ minWidth: selectedNetwork.ssid === CAMERA_WIFI_SSID ? 112 : 82, height: 34 }}
+            sx={{ minWidth: 82, height: 34 }}
           >
             {connecting
               ? <CircularProgress size={17} color="inherit" />
-              : selectedNetwork.ssid === CAMERA_WIFI_SSID
-                ? 'Open camera'
-                : 'Connect'}
+              : 'Connect'}
           </Button>
         </Box>
       )}

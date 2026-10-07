@@ -6,7 +6,7 @@ import Home from "./components/Home";
 import Nav from "./components/Nav";
 import Carplay from './components/Carplay';
 import Camera from './components/Camera';
-import WifiCamera from './components/WifiCamera';
+import UsbCamera from './components/UsbCamera';
 import SystemMenu from './components/SystemMenu';
 import {
   Box,
@@ -117,7 +117,7 @@ function contrastText(backgroundColor: string): '#111111' | '#ffffff' {
 function App() {
   const [time, setTime] = useState(new Date());
   const [clockMode, setClockMode] = useState(false);
-  const [wifiCameraMode, setWifiCameraMode] = useState(false);
+  const [cameraMode, setCameraMode] = useState(false);
   const [systemMenuOpen, setSystemMenuOpen] = useState(false);
   const [powerDialogOpen, setPowerDialogOpen] = useState(false);
   const [pendingPowerAction, setPendingPowerAction] = useState<'restart' | 'poweroff' | null>(null);
@@ -133,7 +133,7 @@ function App() {
   const setReverse = useStatusStore(state => state.setReverse);
 
   const clockButton = useDoubleTap(() => setClockMode(true));
-  const wifiCameraButton = useDoubleTap(() => setWifiCameraMode(active => !active));
+  const cameraButton = useDoubleTap(() => setCameraMode(active => !active));
 
   const settings = useCarplayStore(state => state.settings);
   const saveSettings = useCarplayStore(state => state.saveSettings);
@@ -142,12 +142,12 @@ function App() {
   const surroundTextColor = contrastText(backgroundColor);
 
   const toggleSystemMenu = () => {
-    if (!systemMenuOpen) setWifiCameraMode(false);
+    if (!systemMenuOpen) setCameraMode(false);
     setSystemMenuOpen(open => !open);
   };
 
   const openPowerDialog = () => {
-    setWifiCameraMode(false);
+    setCameraMode(false);
     setSystemMenuOpen(false);
     setPendingPowerAction(null);
     setPowerError('');
@@ -240,9 +240,14 @@ function App() {
         updateCameras(setCameraFound, saveSettings, settings);
       }
     };
+    const cameraHandler = () => updateCameras(setCameraFound, saveSettings, settings);
 
     window.carplay.usb.listenForEvents(usbHandler);
-    return () => window.carplay.usb.unlistenForEvents?.(usbHandler);
+    navigator.mediaDevices.addEventListener('devicechange', cameraHandler);
+    return () => {
+      window.carplay.usb.unlistenForEvents?.(usbHandler);
+      navigator.mediaDevices.removeEventListener('devicechange', cameraHandler);
+    };
   }, [settings]);
 
   return (
@@ -296,10 +301,13 @@ function App() {
               <Route path="/" element={<Home />} />
               <Route path="/settings" element={<Settings settings={settings!} />} />
               <Route path="/info" element={<Info />} />
-              <Route path="/camera" element={<Camera settings={settings!} />} />
+              <Route
+                path="/camera"
+                element={reverse || cameraMode ? null : <Camera settings={settings!} />}
+              />
             </Routes>
 
-            <Modal open={reverse} onClick={() => setReverse(false)}>
+            <Modal open={reverse && !cameraMode} onClick={() => setReverse(false)}>
               <Box sx={style}>
                 <Camera settings={settings} />
               </Box>
@@ -311,10 +319,6 @@ function App() {
                 onBackgroundColorChange={changeBackgroundColor}
                 gpsSmoothing={settings?.gpsSmoothing ?? 0.55}
                 onGpsSmoothingChange={changeGpsSmoothing}
-                onCameraOpen={() => {
-                  setSystemMenuOpen(false)
-                  setWifiCameraMode(true)
-                }}
                 onClose={() => setSystemMenuOpen(false)}
               />
             )}
@@ -603,20 +607,19 @@ function App() {
           finish="graphite"
         />
 
-        {/* Matching control in the right crescent. It toggles the integrated
-            E-Eye Wi-Fi camera path; the existing USB camera route remains
-            available from the CarPlay navigation tabs. Keeping this button
-            above the video surface lets the same double-tap close it again. */}
+        {/* Matching control in the right crescent. It toggles the selected USB
+            camera. Keeping this button above the video surface lets the same
+            double-tap close it again. */}
         <CrescentButton
           edgePct={CAMERA_BUTTON_LEFT_PCT}
           side="right"
-          armed={wifiCameraButton.armed}
-          onClick={wifiCameraButton.onClick}
+          armed={cameraButton.armed}
+          onClick={cameraButton.onClick}
           finish="graphite"
           content="camera"
         />
 
-        {wifiCameraMode && (
+        {cameraMode && (
           <div
             style={{
               position: "absolute",
@@ -625,31 +628,25 @@ function App() {
               touchAction: "none"
             }}
           >
-            <WifiCamera
-              rotation={settings?.wifiCameraRotation ?? 0}
-              cameraOptions={{
-                host: settings?.wifiCameraHost ?? '192.168.10.1',
-                frameSize: settings?.wifiCameraFrameSize ?? 8,
-                jpegQuality: settings?.wifiCameraJpegQuality ?? 20,
-                horizontalFlip: settings?.wifiCameraHorizontalFlip ?? false,
-                verticalFlip: settings?.wifiCameraVerticalFlip ?? false
-              }}
+            <UsbCamera
+              deviceId={settings?.camera ?? ''}
+              rotation={settings?.cameraRotation ?? 0}
+              resolution={settings?.cameraResolution ?? '1280x720'}
+              horizontalFlip={settings?.cameraHorizontalFlip ?? false}
+              verticalFlip={settings?.cameraVerticalFlip ?? false}
               onRotationSave={rotation => {
-                if (settings) saveSettings({ ...settings, wifiCameraRotation: rotation });
+                if (settings) saveSettings({ ...settings, cameraRotation: rotation });
               }}
-              onCameraOptionsSave={options => {
-                if (settings) {
-                  saveSettings({
-                    ...settings,
-                    wifiCameraHost: options.host,
-                    wifiCameraFrameSize: options.frameSize,
-                    wifiCameraJpegQuality: options.jpegQuality,
-                    wifiCameraHorizontalFlip: options.horizontalFlip,
-                    wifiCameraVerticalFlip: options.verticalFlip
-                  });
-                }
+              onResolutionSave={cameraResolution => {
+                if (settings) saveSettings({ ...settings, cameraResolution });
               }}
-              onExit={() => setWifiCameraMode(false)}
+              onHorizontalFlipSave={cameraHorizontalFlip => {
+                if (settings) saveSettings({ ...settings, cameraHorizontalFlip });
+              }}
+              onVerticalFlipSave={cameraVerticalFlip => {
+                if (settings) saveSettings({ ...settings, cameraVerticalFlip });
+              }}
+              onExit={() => setCameraMode(false)}
             />
           </div>
         )}

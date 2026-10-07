@@ -6,29 +6,19 @@
 - The browser-based Chromium kiosk is the production/default target from now on.
 - Keep Electron only as a rollback path unless a task explicitly targets it.
 
-## Wi-Fi backup camera
+## USB backup camera
 
-- Device: E-Eye backup camera.
-- Camera SSID confirmed from the Pi scan and the camera MAC suffix: `backcam_aee72870`.
-- Its WPA-PSK is stored only on the Pi in the root-readable
-  `/etc/round-carplay/eeye-camera-wifi-password` file; it must not be committed.
-- Camera address: `192.168.10.1`.
-- XMIP control: TCP `2222`; XMIP media: TCP `2223`.
-- Validated stream: H.265 Main, `640×480`, 25 FPS, approximately two-second GOP.
-- The backend decodes H.265 with ffmpeg and sends bounded, acknowledged JPEG
-  frames to the browser UI. This avoids relying on Chromium HEVC support.
-- The live camera overlay displays measured decoded FPS and link diagnostics.
-- Opening the camera activates `eeye-camera`. Closing only stops the stream and
-  deliberately keeps the camera hotspot active for fast reopening. Opening or
-  refreshing the System Menu does not change the active connection; normal
-  Wi-Fi resumes only when the user explicitly selects another network.
-- Camera activation briefly releases `wlan0` and restores the exact prior
-  profile if activation fails. The on-display Wi-Fi menu must never disconnect
-  the active profile merely to scan; a partial list is safer than stranding the
-  kiosk off-network.
-- Selecting `backcam_aee72870` in the ordinary Wi-Fi menu launches the same
-  protected camera workflow as the dedicated camera control. It must not use
-  the generic password connector or expose the root-only camera password.
+- Device: UVC camera labelled `2504`, USB VID:PID `32e6:9221`.
+- Chromium captures it directly with `navigator.mediaDevices.getUserMedia`;
+  camera frames never pass through the Node backend or Socket.IO.
+- Opening a camera view powers the device. Unmounting the view stops all media
+  tracks so the camera is released cleanly.
+- Preserve crop-to-fill rotation, horizontal and vertical flips, selectable
+  resolution, parking guides, and live FPS/device diagnostics.
+- The kiosk user must belong to the Linux `video` group and Chromium must grant
+  camera permission without an interactive kiosk prompt.
+- Saved E-Eye/Wi-Fi adjustment values are migrated once to the generic USB
+  camera settings; hotspot address and compression settings are discarded.
 
 ## CarPlay audio
 

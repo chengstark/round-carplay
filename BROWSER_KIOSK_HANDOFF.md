@@ -89,7 +89,7 @@ throughout the experiment.
 - Main-process services currently handle:
   - Carlinkit USB and CarPlay transport
   - CarPlay audio/video/event delivery
-  - E-Eye XMIP/H.265 Wi-Fi camera streaming and diagnostics
+  - UVC/USB camera selection and browser-native capture
   - GPS state
   - NetworkManager Wi-Fi management
   - Settings persistence
@@ -200,9 +200,8 @@ The UI build can remain Vite-based. Add a dedicated command that builds only the
 renderer instead of invoking Electron packaging. The backend should serve a
 fixed local fallback page if no valid UI bundle is available.
 
-Updates requiring internet access must account for the Pi being connected to
-the E-Eye hotspot, which has no internet route. Do not interrupt an active backup
-camera session to fetch an update.
+Updates should remain usable without internet access and must not disrupt the
+local browser/backend connection.
 
 ## Migration phases
 
@@ -242,7 +241,7 @@ while transport is decoupled.
   Electron kiosk.
 - Add a configuration switch to choose Electron or browser kiosk at boot.
 - Provide a recovery command that returns to the known-good Electron kiosk.
-- Test repeated power loss, offline boot, camera Wi-Fi switching, and service
+- Test repeated power loss, offline boot, USB camera reconnects, and service
   restart behavior.
 
 ### Phase 4: Lightweight updates
@@ -280,11 +279,10 @@ The kiosk must not show permission prompts. Audio, microphone, autoplay,
 fullscreen, and any required media permissions must be preconfigured and tested
 under the actual Cage/PAM session.
 
-### Wi-Fi transitions
+### Camera access
 
-The camera button repairs and activates the `eeye-camera`
-NetworkManager profile. Because the backend and browser communicate over
-loopback, switching away from an internet Wi-Fi network must not break the UI.
+The camera button opens the selected UVC device directly in Chromium. The kiosk
+must grant camera permission without a prompt and release the device on close.
 
 ### Security
 
@@ -304,15 +302,15 @@ following are true:
 - The 480-pixel round interface is visually equivalent to the current release.
 - The Pi boots directly into the UI without a desktop, browser chrome, dialogs,
   or keyboard interaction.
-- Boot works with no internet and with the E-Eye hotspot absent.
+- Boot works with no internet and with the USB camera absent.
 - CarPlay connects, renders, accepts touch/key input, and plays audio reliably.
 - Microphone input remains functional.
 - USB disconnect/reconnect and forced reset behavior match the current app.
 - GPS state and smoothing match the current app.
 - Wi-Fi scanning and connection management work.
-- Opening the camera activates `eeye-camera`, disables Wi-Fi power saving, and
-  displays live diagnostics while the XMIP/H.265 stream connects.
-- Camera FPS, latency, reconnection, rotation, and resolution selection match
+- Opening the camera selects the configured UVC device and displays live
+  diagnostics while the media stream starts.
+- Camera FPS, latency, reconnection, rotation, flips, and resolution selection match
   the current app.
 - Reboot, power-off, update status, and recovery operations work without a
   desktop shell.
@@ -328,7 +326,7 @@ Do not begin by changing the kiosk or updater. First extract a typed service
 boundary and implement the browser adapter while Electron remains the default.
 The first milestone should be the unchanged React UI running in desktop
 Chromium against the standalone backend with settings, GPS, networking, and the
-Wi-Fi camera fully working. Add CarPlay media only after the transport and
+USB camera fully working. Add CarPlay media only after the transport and
 backpressure behavior is proven.
 
 ## Explicit non-goals for the initial migration

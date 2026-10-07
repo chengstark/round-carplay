@@ -1,87 +1,18 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Typography } from "@mui/material";
-import ParkingGuides from "./ParkingGuides";
+import React from 'react'
+import type { ExtraConfig } from '../../../main/Globals'
+import UsbCamera from './UsbCamera'
 
-interface CameraProps {
-  settings: { camera: string } | null;
-}
+interface CameraProps { settings: ExtraConfig | null }
 
-const Camera: React.FC<CameraProps> = ({ settings }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [cameraFound, setCameraFound] = useState(false);
+const Camera: React.FC<CameraProps> = ({ settings }) => (
+  <UsbCamera
+    deviceId={settings?.camera ?? ''}
+    rotation={settings?.cameraRotation ?? 0}
+    resolution={settings?.cameraResolution ?? '1280x720'}
+    horizontalFlip={settings?.cameraHorizontalFlip ?? false}
+    verticalFlip={settings?.cameraVerticalFlip ?? false}
+    showControls={false}
+  />
+)
 
-  useEffect(() => {
-    let activeStream: MediaStream | null = null;
-
-    if (!settings?.camera) {
-      setCameraFound(false);
-      return;
-    }
-
-    navigator.mediaDevices
-      .getUserMedia({ video: { width: 800, deviceId: settings.camera } })
-      .then(stream => {
-        activeStream = stream;
-        setCameraFound(true);
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play();
-        }
-      })
-      .catch(err => {
-        console.error("error:", err);
-        setCameraFound(false);
-      });
-
-    // Cleanup: stoppe alle Tracks, wenn der Tab gewechselt wird oder Component unmountet
-    return () => {
-      if (activeStream) {
-        activeStream.getTracks().forEach(track => track.stop());
-      }
-      // Optional: Video-Element zurücksetzen
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-      }
-      setCameraFound(false);
-    };
-  }, [settings?.camera]);
-
-  return (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        overflow: "hidden",
-        position: "relative",
-      }}
-    >
-      <video
-        ref={videoRef}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          objectPosition: "center",
-          display: "block",
-        }}
-      />
-      <ParkingGuides />
-      {!cameraFound && (
-        <Typography
-          variant="subtitle1"
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            color: "#fff",
-          }}
-        >
-          No Camera Found
-        </Typography>
-      )}
-    </div>
-  );
-};
-
-export default Camera;
+export default Camera

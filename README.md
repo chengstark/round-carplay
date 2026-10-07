@@ -20,48 +20,28 @@
 
 Round Caraplay is an attempt to adapt the classic Apple CarPlay to a round screen using a Raspberry Pi. The idea is to display CarPlay in a central square area and then fill the surrounding space with information coming from the vehicle’s OBD bus.
 
-Support for Linux (ARM/x86) and macOS (ARM) as well. It is a standalone Electron app, optimized for embedded setups and ultra-low-resolution OEM displays.  
+The production runtime is a Chromium kiosk with a local Node.js hardware backend,
+optimized for Raspberry Pi and ultra-low-resolution OEM displays.
 
 > **Requirements:** A Carlinkit **CPC200-CCPA** (wireless & wired) or **CPC200-CCPW** (wired only) adapter.
 
-## Wi-Fi backup camera
+## USB backup camera
 
-The right-side crescent button opens the integrated E-Eye Wi-Fi backup camera.
-Double-tap the button to open or close the feed. The host running Round CarPlay
-must be connected to `backcam_aee72870`. The application sends XMIP control JSON
-to `192.168.10.1:2222`, receives framed H.265 media from TCP port `2223`, and
-uses ffmpeg to decode it for Chromium. A compact live strip at the top of the
-camera screen reports stream state, decoded FPS, H.265 data rate, frame size,
-Wi-Fi SSID, signal strength, link rates, power-saving state, and reconnect count.
-If the feed closes or stops producing frames, the frozen image is cleared and
-the application reconnects automatically.
-The complete 16:9 camera image is displayed as the largest rectangle that fits
-inside the circular screen, so none of the source frame is cropped. The camera
-can be rotated continuously from `0°` through `359°`; the slider and `−1°` /
-`+1°` buttons support coarse and fine adjustment, and the selection is saved
-across restarts. Horizontal and vertical flip controls apply directly to the
-displayed image and are also saved across restarts. For visual calibration, tap
-the adjustment button at the top center of the live feed. Resolution changes
-are sent in the XMIP `realplay` request and persist in the application config.
-VGA `640×480` at 25 FPS is the validated default. While the camera is open it
-covers the clock and surround controls and provides a dedicated exit button at
-the upper left.
+The right-side crescent button opens the selected UVC/USB backup camera directly
+through Chromium's media-device API. Double-tap the button to open or close the
+feed. Opening the stream powers the camera; closing it stops every media track
+and releases the device.
 
-The Pi setup script installs ffmpeg and disables Wi-Fi power saving through
-NetworkManager and at kiosk startup to reduce latency spikes and dropouts. Wi-Fi networks selected
-through the on-display system menu are saved as preferred, persistent
-NetworkManager profiles with unlimited automatic reconnect attempts.
-Opening the integrated camera automatically connects the Pi to the
-`backcam_aee72870` hotspot using the password stored by the installer,
-so the kiosk does not require keyboard input. The camera connection profile
-explicitly disables Wi-Fi power saving each time it is repaired and activated.
-Closing the camera keeps the camera hotspot active so reopening the video is
-fast. Opening or refreshing the System Menu scans without changing the active
-connection. Normal Wi-Fi resumes only when another network is selected there.
+The existing image calibration is preserved: crop-to-fill at every angle,
+continuous `0°`–`359°` rotation, one-degree adjustment buttons, horizontal and
+vertical flips, resolution selection, and parking guides. The Camera tab and
+reverse-triggered view use the same adjusted canvas. The live strip reports the
+device name, negotiated resolution, and measured frame rate.
 
-The Camera tab continues to support ordinary USB cameras through the browser
-media-device API. The older XIAO-only SDL diagnostic viewer is retained for
-reference in [`wifi_cam`](wifi_cam/README.md); it is not used by E-Eye.
+The installer grants the kiosk user access to Linux video devices and launches
+Chromium with camera permission pre-approved for the local kiosk. On a fresh or
+disconnected selection, the app prefers a camera labelled `2504`, then another
+USB camera, before falling back to the first available video input.
 
 ## GPS speedometer
 

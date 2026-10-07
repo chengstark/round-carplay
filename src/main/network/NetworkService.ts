@@ -4,8 +4,6 @@ import { networkInterfaces } from 'node:os'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
-const CAMERA_WIFI_SSID = 'backcam_aee72870'
-const CAMERA_WIFI_HELPER = '/usr/local/sbin/round-carplay-camera-wifi'
 const WIFI_SCAN_HELPER = '/usr/local/sbin/round-carplay-scan-wifi'
 const WIFI_CONNECT_HELPER = '/usr/local/sbin/round-carplay-connect-wifi'
 
@@ -36,51 +34,6 @@ export type WifiConnectResult = {
 
 /** NetworkManager bridge for the on-display Wi-Fi picker. */
 export class NetworkService {
-  private cameraWifiAttempt: Promise<WifiConnectResult> | null = null
-
-  connectCameraWifi(): Promise<WifiConnectResult> {
-    if (this.cameraWifiAttempt) return this.cameraWifiAttempt
-
-    const attempt = this.connectCameraWifiInternal().finally(() => {
-      if (this.cameraWifiAttempt === attempt) this.cameraWifiAttempt = null
-    })
-    this.cameraWifiAttempt = attempt
-    return attempt
-  }
-
-  private async connectCameraWifiInternal(): Promise<WifiConnectResult> {
-    if (process.platform !== 'linux') {
-      return {
-        ok: false,
-        message: 'Camera Wi-Fi connection is available on Raspberry Pi OS',
-        ipAddresses: this.getIpAddresses()
-      }
-    }
-
-    try {
-      if (!existsSync(CAMERA_WIFI_HELPER)) {
-        throw new Error('Camera Wi-Fi helper is not installed; rerun the kiosk installer')
-      }
-      await execFileAsync('sudo', ['-n', CAMERA_WIFI_HELPER], {
-        encoding: 'utf8',
-        timeout: 70_000,
-        maxBuffer: 512 * 1024,
-        env: { ...process.env, LC_ALL: 'C' }
-      })
-      return {
-        ok: true,
-        message: `Connected to ${CAMERA_WIFI_SSID}`,
-        ipAddresses: this.getIpAddresses()
-      }
-    } catch (error) {
-      return {
-        ok: false,
-        message: commandErrorMessage(error),
-        ipAddresses: this.getIpAddresses()
-      }
-    }
-  }
-
   async scanWifi(): Promise<NetworkSnapshot> {
     if (process.platform !== 'linux') {
       return {
