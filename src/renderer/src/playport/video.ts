@@ -116,6 +116,19 @@ export class PlayPortVideo {
     this.decoder = null
   }
 
+  restartAtKeyframe(): void {
+    try {
+      if (this.decoder?.state === 'configured' && this.decoderConfig) {
+        this.decoder.reset()
+        this.decoder.configure(this.decoderConfig)
+      }
+    } catch (error) {
+      this.onError(error instanceof Error ? error.message : String(error))
+    }
+    this.waitingForKeyframe = true
+    this.requestKeyframe()
+  }
+
   private draw(frame: VideoFrame): void {
     try {
       // Resample the full frame at the canvas's displayed pixel size. Keeping

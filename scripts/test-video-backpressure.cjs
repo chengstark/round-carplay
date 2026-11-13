@@ -45,5 +45,12 @@ test('slow decoding stays bounded and waits for a new H.264 reference frame afte
   player.push(frame(true))
   assert.equal(decoder.decodeQueueSize, 1)
   assert.equal(decoder.frames.at(-1).type, 'key')
+  const beforeRefresh = decoder.frames.length
+  player.restartAtKeyframe()
+  assert.equal(decoder.resets, 2, 'app switching discards queued frames from the previous screen')
+  player.push(frame(false))
+  assert.equal(decoder.frames.length, beforeRefresh)
+  player.push(frame(true))
+  assert.equal(decoder.frames.length, beforeRefresh + 1)
   player.close()
 })

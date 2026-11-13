@@ -9,6 +9,7 @@ import {
   type VehicleUiSnapshot
 } from '../playport/protocol'
 import { PlayPortVideo } from '../playport/video'
+import { AppLaunch, type AppLaunchState } from '../playport/appLaunch'
 import NavigationTrip from './NavigationTrip'
 import { SpeedReader } from '../playport/speedReader'
 import { EMPTY_SPEED, type SpeedReading } from '../../../shared/speedOcr'
@@ -24,7 +25,6 @@ type Props = {
 
 const MAIN_SCREEN_STREAM = 110
 const MAP_SCREEN_STREAM = 111
-const APP_TRANSITION_MS = 900
 
 function appForView(view: PlayPortView): CarPlayApp | null {
   return view === 'media' ? 'youtube-music' : view === 'phone' ? 'phone' : null
@@ -38,13 +38,16 @@ export default function PlayPortSurface({ view, native = false, onSpeed }: Props
   const currentView = useRef(view)
   currentView.current = view
   const activePointer = useRef<number | null>(null)
-  const appLaunchTime = useRef<number | null>(null)
-  const appLaunchTimer = useRef<number | null>(null)
-  // Both apps share one native screen stream. Only its current app is ready
-  // for immediate reveal; switching apps must request the new app first.
-  const preparedApp = useRef<CarPlayApp | null>(null)
-  const pendingApp = useRef<CarPlayApp | null>(null)
-  const [readyApp, setReadyApp] = useState<CarPlayApp | null>(null)
+  const mainPlayer = useRef<PlayPortVideo | null>(null)
+  const appLauncher = useRef<AppLaunch | null>(null)
+  const [appLaunch, setAppLaunch] = useState<AppLaunchState>({ state: 'idle' })
+  if (appLauncher.current === null) {
+    appLauncher.current = new AppLaunch((app, requestId) => {
+      if (!sessionActive.current || socket.current?.readyState !== WebSocket.OPEN) return false
+      socket.current.send(JSON.stringify({ type: 'launchApp', app, requestId } satisfies ClientMessage))
+      return true
+    }, () => mainPlayer.current?.restartAtKeyframe(), setAppLaunch)
+  }
   const reconnectTimer = useRef<number | null>(null)
   const [connection, setConnection] = useState<'connecting' | 'connected' | 'live' | 'offline'>('connecting')
   const [error, setError] = useState('')
@@ -54,34 +57,8 @@ export default function PlayPortSurface({ view, native = false, onSpeed }: Props
   const speedOutput = useRef(onSpeed)
   speedOutput.current = onSpeed
 
-  const resetApp = useCallback(() => {
-    if (appLaunchTimer.current !== null) window.clearTimeout(appLaunchTimer.current)
-    appLaunchTimer.current = null
-    appLaunchTime.current = null
-    preparedApp.current = null
-    pendingApp.current = null
-    setReadyApp(null)
-  }, [])
-
-  const launchApp = useCallback((app: CarPlayApp) => {
-    const connection = socket.current
-    // The main stream keeps decoding behind the map. A prepared panel can
-    // simply be revealed; do not relaunch the app or repeat its transition.
-    if (!sessionActive.current || connection?.readyState !== WebSocket.OPEN ||
-        preparedApp.current === app || pendingApp.current === app) return
-    preparedApp.current = null
-    pendingApp.current = app
-    setReadyApp(null)
-    appLaunchTime.current = performance.now()
-    connection.send(JSON.stringify({ type: 'launchApp', app } satisfies ClientMessage))
-    if (appLaunchTimer.current !== null) window.clearTimeout(appLaunchTimer.current)
-    // Keep the map on screen during the iPhone's app-switch animation. Ask for
-    // a fresh frame afterwards rather than exposing the cached launcher frame.
-    appLaunchTimer.current = window.setTimeout(() => {
-      appLaunchTimer.current = null
-      if (connection.readyState === WebSocket.OPEN) connection.send(JSON.stringify({ type: 'keyframe' }))
-    }, APP_TRANSITION_MS)
-  }, [])
+  const resetApp = useCallback(() => appLauncher.current?.cancel(), [])
+  const launchApp = useCallback((app: CarPlayApp) => appLauncher.current?.open(app), [])
 
   useEffect(() => {
     if (!mapCanvas.current || !mainCanvas.current) return
@@ -109,18 +86,13 @@ export default function PlayPortSurface({ view, native = false, onSpeed }: Props
       mainCanvas.current,
       () => {
         if (native) setConnection('live')
-        if (pendingApp.current !== null && appLaunchTime.current !== null &&
-            performance.now() - appLaunchTime.current >= APP_TRANSITION_MS) {
-          preparedApp.current = pendingApp.current
-          pendingApp.current = null
-          appLaunchTime.current = null
-          setReadyApp(preparedApp.current)
-        }
+        appLauncher.current?.frame()
       },
       setError,
       requestKeyframe,
       frame => speedReader.frame(frame)
     )
+    mainPlayer.current = mainVideo
     const audio = new PlayPortAudio(setError)
 
     const open = () => {
@@ -140,6 +112,7 @@ export default function PlayPortSurface({ view, native = false, onSpeed }: Props
         if (typeof event.data === 'string') {
           try {
             const message = JSON.parse(event.data) as ServerMessage
+            if (message.type === 'appLaunch' && message.appLaunch) appLauncher.current?.reply(message.appLaunch)
             if (message.vehicle) { navigation.current = message.vehicle.navigation; setVehicle(message.vehicle) }
             if (message.type === 'hello' || message.type === 'session') {
               sessionActive.current = message.sessionActive === true
@@ -207,10 +180,11 @@ export default function PlayPortSurface({ view, native = false, onSpeed }: Props
       stopped = true
       window.removeEventListener('pointerdown', unlockAudio)
       if (reconnectTimer.current !== null) window.clearTimeout(reconnectTimer.current)
-      if (appLaunchTimer.current !== null) window.clearTimeout(appLaunchTimer.current)
+      appLauncher.current?.cancel()
       socket.current?.close()
       socket.current = null
       mapVideo.close()
+      mainPlayer.current = null
       mainVideo.close()
       speedReader.close()
       audio.close()
@@ -230,14 +204,15 @@ export default function PlayPortSurface({ view, native = false, onSpeed }: Props
   useEffect(() => {
     const app = appForView(view)
     if (app) launchApp(app)
+    else resetApp()
     return () => {
-      // Keep the decoded panel and any first-launch work alive while hidden.
+      appLauncher.current?.cancel()
       if (activePointer.current !== null && socket.current?.readyState === WebSocket.OPEN) {
         socket.current.send(JSON.stringify({ type: 'touch', contacts: [] } satisfies ClientMessage))
       }
       activePointer.current = null
     }
-  }, [view, launchApp])
+  }, [view, launchApp, resetApp])
 
   const sendTouch = (event: React.PointerEvent<HTMLCanvasElement>, down: boolean) => {
     const bounds = event.currentTarget.getBoundingClientRect()
@@ -260,12 +235,12 @@ export default function PlayPortSurface({ view, native = false, onSpeed }: Props
 
   return (
     <main className="playport-surface" data-view={view}
-      data-native={native} data-app-ready={readyApp !== null && readyApp === appForView(view)} aria-label={native ? 'Full native CarPlay' : 'CarPlay'}>
+      data-native={native} data-app-ready={appLaunch.state === 'displaying' && appLaunch.app === appForView(view)} aria-label={native ? 'Full native CarPlay' : 'CarPlay'}>
       <canvas ref={mapCanvas} className="playport-map" width={1024} height={1024} />
       <canvas ref={mainCanvas} className="playport-main" width={1024} height={1024}
-        aria-label={native ? 'Interactive native CarPlay screen' : view === 'phone' ? 'Phone CarPlay browsing screen' : 'YouTube Music CarPlay browsing screen'}
+        aria-label="Interactive CarPlay main screen"
         onPointerDown={event => {
-          if ((!native && (readyApp === null || readyApp !== appForView(view))) ||
+          if ((!native && (appLaunch.state !== 'displaying' || appLaunch.app !== appForView(view))) ||
               !sessionActive.current || event.button !== 0 || activePointer.current !== null) return
           event.preventDefault()
           activePointer.current = event.pointerId
@@ -280,6 +255,15 @@ export default function PlayPortSurface({ view, native = false, onSpeed }: Props
         onPointerUp={releaseTouch} onPointerCancel={releaseTouch} onLostPointerCapture={releaseTouch}
       />
       <div className="playport-vignette" />
+      {!native && view !== 'map' && appLaunch.state !== 'displaying' && connection === 'live' && (
+        <div className="playport-app-status" role="status">
+          <strong>{appLaunch.state === 'error' ? 'Could not open app' :
+            `Opening ${view === 'phone' ? 'Phone' : 'YouTube Music'}…`}</strong>
+          {appLaunch.message && <span>{appLaunch.message}</span>}
+          {appLaunch.state === 'error' && <button type="button" onClick={() => launchApp(appForView(view)!)}>Try again</button>}
+        </div>
+      )}
+
 
       {native && <nav className="native-controls" aria-label="Native CarPlay controls">
         <button type="button" onClick={() => nativeKey('home')}>CarPlay Home</button>

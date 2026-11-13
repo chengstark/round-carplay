@@ -35,7 +35,7 @@ jobs:
         run: |
           ./node_modules/.bin/tsc --noEmit -p tsconfig.backend.json
           ./node_modules/.bin/tsc --noEmit -p tsconfig.web.json --composite false
-          node --test scripts/test-pi-deployment.cjs scripts/test-pi-updates.cjs scripts/test-navigation-overlay.cjs scripts/test-speed-ocr.cjs scripts/test-video-backpressure.cjs
+          node --test scripts/test-pi-deployment.cjs scripts/test-pi-updates.cjs scripts/test-navigation-overlay.cjs scripts/test-speed-ocr.cjs scripts/test-video-backpressure.cjs scripts/test-app-launch.cjs
           python3 -m unittest discover -s deploy/pi -p 'test_*.py'
       - name: Build the current PlayPort source snapshot
         run: |
@@ -49,7 +49,7 @@ jobs:
               tar.extractall('dist/playport-source', filter='data')
           PY
           cd dist/playport-source
-          bash gradlew --no-daemon :server:test :server:installDist
+          bash gradlew --no-daemon :protocol:test :server:test :server:installDist
           bash linux/bt-bridge/build.sh
       - name: Package and sign the ARM64 update
         env:

@@ -53,10 +53,17 @@ export type WireMessage =
 
 export type CarPlayApp = 'youtube-music' | 'phone'
 
+export type AppLaunchResult = {
+  requestId: string
+  app: CarPlayApp
+  state: 'accepted' | 'error'
+  message: string
+}
+
 export type ClientMessage =
   | { type: 'touch'; contacts: Array<{ id: number; x: number; y: number; down: boolean }> }
   | { type: 'media'; media: number }
-  | { type: 'launchApp'; app: CarPlayApp }
+  | { type: 'launchApp'; app: CarPlayApp; requestId: string }
   | { type: 'knob'; knob: { select: boolean; home: boolean; back: boolean; x: number; y: number; wheel: number } }
   | { type: 'night'; night: boolean }
   | { type: 'telephony'; telephony: number }
@@ -119,6 +126,7 @@ export type ServerMessage = {
   roundDisplay?: boolean
   message?: string
   vehicle?: VehicleUiSnapshot
+  appLaunch?: AppLaunchResult
 }
 
 export function parseWireMessage(buffer: ArrayBuffer): WireMessage | null {
