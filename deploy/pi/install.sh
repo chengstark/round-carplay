@@ -33,7 +33,7 @@ else
   sudo apt-get update
   sudo apt-get install --yes --no-install-recommends \
     cage chromium nodejs openjdk-21-jre-headless bluez libbluetooth-dev build-essential \
-    python3 tesseract-ocr tesseract-ocr-eng network-manager dbus-user-session \
+    python3 python3-dbus python3-gi tesseract-ocr tesseract-ocr-eng network-manager dbus-user-session \
     libpam-systemd curl rfkill iw
 fi
 node -e 'if(Number(process.versions.node.split(".")[0])<20)process.exit(1)'
@@ -65,6 +65,7 @@ RELEASE="$ROOT/releases/$VERSION"
 mkdir -p "$RELEASE"
 cp -R "$PACKAGE/dashboard" "$PACKAGE/playport" "$PACKAGE/deploy" "$PACKAGE/manifest.json" "$RELEASE/"
 bash "$RELEASE/playport/linux/bt-bridge/build.sh"
+chmod 0755 "$RELEASE/deploy/round-carplay-bt-bridge.py" "$RELEASE/deploy/diagnose-connection.py"
 chmod 0755 "$RELEASE/playport/bin/server"
 if [[ ! -f "$CONFIG" ]]; then python3 "$RELEASE/deploy/launch.py" configure; fi
 # Build and configure successfully before replacing the current release.

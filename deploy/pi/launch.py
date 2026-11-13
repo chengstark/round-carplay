@@ -93,7 +93,7 @@ def main():
                    '--diameter', '512', '--ui-scale', '100', '--main-render-scale', '200',
                    '--fps', '60', '--wifi-ssid', data['ssid'], '--bt-address', data['phone'],
                    '--wifi-channel', wifi_channel(),
-                   '--bt-bridge', str(current / 'playport/linux/bt-bridge/bt-bridge'),
+                   '--bt-bridge', str(current / 'deploy/round-carplay-bt-bridge.py'),
                    '--bind', lan_address(), '--mdns', 'jmdns',
                    '--identity-dir', str(ROOT / 'private/identity'),
                    '--state-dir', str(state), '--token', data['token']]

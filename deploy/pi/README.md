@@ -70,22 +70,18 @@ three services. It asks for the Wi-Fi name/password and the phone's Bluetooth
 address; input is saved privately with mode 0600. The Mac's DHCP IP and VM SSH
 address are never copied into the launcher. The Pi resolves its LAN IP at boot.
 
-Find the phone address and pair on this Pi before rebooting (pairing on the VM
-does not pair it on the Pi). Open iPhone **Settings → Bluetooth**, then:
+Pairing on another computer does not pair the phone to the Pi. The current
+Linux bridge owns the complete first-pair flow: it advertises the accessory
+iAP and CarPlay discovery profiles, opens a five-minute setup window when the
+configured phone is not bonded, automatically confirms the Pi side of numeric
+comparison, trusts the completed bond, and closes the setup window.
 
-```sh
-sudo bluetoothctl
-power on
-agent KeyboardDisplay
-default-agent
-scan on
-# Wait for your phone, then use its actual address:
-pair AA:BB:CC:DD:EE:FF
-# Confirm the code on the phone and in bluetoothctl.
-trust AA:BB:CC:DD:EE:FF
-scan off
-quit
-```
+On the iPhone, open **Settings → General → CarPlay → Available Cars**, select
+**PlayPort**, and approve the one iOS pairing/CarPlay prompt. Do not coordinate
+a code in a terminal. The stored BlueZ bond survives dashboard updates and all
+later boots reconnect automatically. If the setup window expires, restart only
+`round-carplay-playport.service` to open another window; a full Pi reboot is not
+required.
 
 If installation preceded pairing and you need to change the address/settings:
 
@@ -104,6 +100,8 @@ no reliable speed is available. Do not infer numeric accuracy from an OCR count.
 ```sh
 systemctl status round-carplay-playport round-carplay-backend round-carplay-browser-kiosk
 curl -fsS http://127.0.0.1:4000/health
+journalctl -u round-carplay-playport -b --no-pager
+~/.local/share/round-carplay-pi/current/deploy/diagnose-connection.py
 journalctl -u round-carplay-playport -u round-carplay-backend -u round-carplay-browser-kiosk -b --no-pager
 free -h
 vcgencmd get_throttled
