@@ -24,7 +24,7 @@
     "build:mac": "npm run clock:check && electron-vite build && electron-builder --mac --arm64 --config",
     "build:linux": "npm run clock:check && electron-vite build && electron-builder --linux --config",
     "build:armLinux": "npm run clock:check && electron-vite build && electron-builder --linux AppImage --arm64 --config && node scripts/install-built-appimage.mjs",
-    "test:pi": "node --test scripts/test-pi-deployment.cjs scripts/test-pi-updates.cjs scripts/test-navigation-overlay.cjs scripts/test-speed-ocr.cjs && python3 -m unittest discover -s deploy/pi -p \"test_*.py\"",
+    "test:pi": "node --test scripts/test-pi-deployment.cjs scripts/test-pi-updates.cjs scripts/test-navigation-overlay.cjs scripts/test-speed-ocr.cjs scripts/test-video-backpressure.cjs && python3 -m unittest discover -s deploy/pi -p \"test_*.py\"",
     "package:pi": "node scripts/package-pi.mjs",
     "package:pi-ota": "node scripts/package-pi-ota.mjs",
     "snapshot:playport": "node scripts/snapshot-playport.mjs"

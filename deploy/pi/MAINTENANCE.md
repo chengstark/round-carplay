@@ -94,6 +94,7 @@ root. Ordinary app/host updates use the installed fixed maintenance service.
 
 Validation in this chat covers mocked Wi-Fi join/restore, signed-feed rejection,
 download integrity, idle deferral, candidate failure and rollback/interrupted
-activation. Physical Wi-Fi switching, the GitHub-hosted build and the first
-device OTA apply still require validation after network access is restored and
-the reviewed branch/signing secret are published.
+activation. The first GitHub-hosted build and public signed feed have been verified.
+Physical Wi-Fi switching and the first device OTA apply still require validation
+after device access is restored. The renderer limits pending video decodes and
+resumes on a fresh keyframe if the Pi falls behind, preserving the H.264 chain.

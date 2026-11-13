@@ -34,8 +34,9 @@ wait while CarPlay is active. The previous release is retained and restored
 when startup health checks fail. See [maintenance setup](deploy/pi/MAINTENANCE.md)
 for the one-time bootstrap, signing secret and hosted release activation.
 
-The GitHub workflow and maintenance code are prepared locally. Publication and
-physical validation are required before treating this as a proven OTA channel.
+The dedicated GitHub workflow builds and publishes signed ARM64 releases. Its
+first hosted build and public feed signature were verified. Device Wi-Fi
+switching and the first OTA activation still require physical validation.
 
 ## Development
 
