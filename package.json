@@ -23,7 +23,11 @@
     "postinstall": "electron-builder install-app-deps",
     "build:mac": "npm run clock:check && electron-vite build && electron-builder --mac --arm64 --config",
     "build:linux": "npm run clock:check && electron-vite build && electron-builder --linux --config",
-    "build:armLinux": "npm run clock:check && electron-vite build && electron-builder --linux AppImage --arm64 --config && node scripts/install-built-appimage.mjs"
+    "build:armLinux": "npm run clock:check && electron-vite build && electron-builder --linux AppImage --arm64 --config && node scripts/install-built-appimage.mjs",
+    "test:pi": "node --test scripts/test-pi-deployment.cjs scripts/test-pi-updates.cjs scripts/test-navigation-overlay.cjs scripts/test-speed-ocr.cjs && python3 -m unittest discover -s deploy/pi -p \"test_*.py\"",
+    "package:pi": "node scripts/package-pi.mjs",
+    "package:pi-ota": "node scripts/package-pi-ota.mjs",
+    "snapshot:playport": "node scripts/snapshot-playport.mjs"
   },
   "dependencies": {
     "@electron-toolkit/utils": "4.0.0",
@@ -42,6 +46,7 @@
     "stream-browserify": "^3.0.0",
     "usb": "^2.16.0",
     "vite-plugin-esmodule": "^1.5.0",
+    "ws": "~8.21.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
@@ -54,6 +59,7 @@
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "@types/w3c-web-usb": "^1.0.10",
+    "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^8.40.0",
     "@typescript-eslint/parser": "^8.40.0",
     "@vitejs/plugin-react": "^5.0.1",

@@ -33,6 +33,11 @@ function installBrowserApi(): void {
     else pushBounded(videoQueue, normalized, 64)
   })
   const api: CarplayApi = {
+    brightness: {
+      getStatus: () => rpc(socket, 'brightness.getStatus'),
+      start: (direction) => rpc(socket, 'brightness.start', direction),
+      stop: (immediate) => rpc(socket, 'brightness.stop', immediate)
+    },
     quit: () => rpc(socket, 'quit'),
     onUSBResetStatus: (callback) => {
       socket.on('usb-reset-start', (value) => callback(undefined, value))
@@ -60,9 +65,9 @@ function installBrowserApi(): void {
       onState: (callback) => addListener(socket, 'gps-state', callback)
     },
     network: {
-      scanWifi: () => rpc(socket, 'network.scanWifi'),
+      scanWifi: () => rpcWithTimeout(socket, 80_000, 'network.scanWifi'),
       connectWifi: (ssid, password) =>
-        rpcWithTimeout(socket, 45_000, 'network.connectWifi', ssid, password),
+        rpcWithTimeout(socket, 160_000, 'network.connectWifi', ssid, password),
       getIpAddresses: () => rpc(socket, 'network.getIpAddresses')
     },
     bluetooth: {

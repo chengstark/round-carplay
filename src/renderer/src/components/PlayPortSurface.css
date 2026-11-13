@@ -1,0 +1,198 @@
+.playport-surface {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #050706;
+  color: #fff;
+  isolation: isolate;
+}
+
+.playport-map,
+.playport-main {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: auto;
+}
+
+.playport-main {
+  opacity: 0;
+  pointer-events: none;
+  /* The 512px main stream places the app in its round-safe center. Reveal
+     that app window over the separate map stream, excluding the wallpaper
+     and native CarPlay dock. Keep the full canvas geometry for touch mapping. */
+  /* Match the native panel's inner edge in the 512px stream: x=76..436,
+     y=76..392, with an 18px corner. This excludes its outer shadow/wallpaper
+     fringe instead of drawing a second rounded outline around it. */
+  clip-path: inset(14.84375% 14.84375% 23.4375% round 3.515625cqw);
+  /* Center the app window itself, whose source bounds sit above the stream's
+     midpoint. Enlarge uniformly and leave room for the bottom mode button. */
+  transform: translateY(4.46875%) scale(1.04);
+  transform-origin: center;
+}
+.playport-surface:is([data-view="media"], [data-view="phone"])[data-app-ready="true"] .playport-main {
+  opacity: 1;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.native-preview { position: fixed; inset: 0; background: #090b0d; }
+.playport-surface[data-native="true"] {
+  inset: auto;
+  top: calc(50% - 30px);
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(100vw, calc(100vh - 88px));
+  height: min(100vw, calc(100vh - 88px));
+  border-radius: 0;
+  overflow: visible;
+  container-type: inline-size;
+}
+.playport-surface[data-native="true"] .playport-map { display: none; }
+.playport-surface[data-native="true"] .playport-main {
+  opacity: 1;
+  pointer-events: auto;
+  touch-action: none;
+  clip-path: none;
+  transform: none;
+  cursor: default;
+}
+.native-controls { position: absolute; top: calc(100% + 12px); left: 12px; z-index: 5; display: flex; gap: 8px; }
+.native-controls button { padding: 10px 16px; border: 1px solid #56615b; border-radius: 8px; background: #0b1719; color: #fff; cursor: pointer; font: inherit; }
+
+.playport-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Dark radial gradients visibly posterize into concentric rings on the
+     480x480 panel. Keep the live CarPlay image unfiltered instead. */
+  background: none;
+}
+
+.playport-guidance {
+  position: absolute;
+  z-index: 3;
+  top: 17%;
+  left: 11%;
+  max-width: 65%;
+  min-height: 12%;
+  display: flex;
+  align-items: center;
+  gap: 2.2cqw;
+  padding: 1.6% 2.8% 1.6% 1.6%;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 999px;
+  background: rgba(4,9,7,.78);
+  box-shadow: 0 1.2cqw 3.4cqw rgba(0,0,0,.35);
+  backdrop-filter: blur(16px);
+}
+
+.playport-maneuver {
+  width: 10cqw;
+  aspect-ratio: 1;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #152015;
+  background: #d9f58f;
+  font-size: 6cqw;
+  font-weight: 700;
+}
+
+.playport-guidance > span:last-child { min-width: 0; display: flex; flex-direction: column; gap: .35cqw; }
+.playport-guidance strong { font-size: 4cqw; line-height: 1; white-space: nowrap; }
+.playport-guidance strong:empty { display: none; }
+.playport-guidance span span { max-width: 45cqw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #dfe4de; font-size: 2.6cqw; }
+
+.navigation-trip {
+  position: absolute;
+  z-index: 3;
+  top: 33%;
+  left: 7%;
+  width: max-content;
+  max-width: 42%;
+  display: flex;
+  flex-direction: column;
+  gap: .8cqw;
+  padding: 1.6cqw 2.3cqw;
+  border-radius: 3cqw;
+  background: rgba(6, 16, 20, .85);
+  backdrop-filter: blur(10px);
+  color: #f0f3ee;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  font-size: 3.8cqw;
+  line-height: 1.2;
+}
+.navigation-source { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.navigation-trip-arrival {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 1cqw;
+}
+.navigation-trip-arrival strong { font-weight: 650; letter-spacing: -.03em; white-space: nowrap; }
+.navigation-trip-arrival small { color: #becabf; font-size: 2.3cqw; }
+.navigation-trip-remaining { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 1cqw; row-gap: .5cqw; font-weight: 500; }
+.navigation-trip-remaining > span:not(.navigation-trip-separator) { white-space: nowrap; }
+.navigation-trip-separator { color: #93a297; }
+
+.playport-speed-box { position: absolute; z-index: 3; right: 15%; top: 24%; display: flex; gap: 1.2cqw; align-items: center; padding: .7cqw; border-radius: 1.6cqw; background: #0b1719; pointer-events: none; font-variant-numeric: tabular-nums; }
+.playport-speed-limit { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 7.8cqw; padding: .8cqw; border: .3cqw solid #152018; border-radius: 1.1cqw; background: #f1f2e7; color: #142019; }
+.playport-speed-limit small { font-size: 1.45cqw; font-weight: 700; }
+.playport-speed-limit strong, .playport-speed-current strong { font-size: 4.3cqw; line-height: 1.1; }
+.playport-speed-current { display: flex; flex-direction: column; align-items: center; padding: .5cqw; }
+.playport-speed-current small { font-size: 1.8cqw; }
+
+.playport-content {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12% 18% 25%;
+  text-align: center;
+}
+
+.playport-content strong { max-width: 100%; margin-top: 1.4%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 5.2cqw; letter-spacing: -.04em; }
+.playport-content > span:not(.playport-kicker) { max-width: 100%; margin-top: 1.2%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #bdc5bd; font-size: 2.7cqw; }
+.playport-kicker { color: #d9f58f; font-size: 1.9cqw; letter-spacing: .2em; }
+
+.playport-media-controls { display: flex; align-items: center; gap: 2.5cqw; margin-top: 5%; }
+.playport-media-controls button,
+.playport-call {
+  border: 1px solid rgba(255,255,255,.18);
+  color: #fff;
+  background: rgba(0,0,0,.56);
+  backdrop-filter: blur(12px);
+}
+.playport-media-controls button { width: 11cqw; aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; }
+.playport-media-controls button.primary { width: 14cqw; color: #152015; background: #d9f58f; }
+.playport-media-controls svg { font-size: 6cqw; }
+
+.playport-phone-icon { font-size: 13cqw !important; color: #d9f58f; margin-bottom: 2%; }
+.playport-call { display: flex; align-items: center; gap: 1cqw; margin-top: 5%; padding: 2.2cqw 3.8cqw; border-radius: 999px; font-size: 2.3cqw; }
+
+.playport-connection {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5cqw;
+  padding: 25%;
+  text-align: center;
+  /* A flat fill avoids the false "burn-in" rings produced when the panel's
+     controller quantizes a near-black gradient. */
+  background: #050706;
+}
+.playport-connection strong { font-size: 3.6cqw; }
+.playport-connection span { color: #aab3ab; font-size: 1.85cqw; }

@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.node.json",
+  "include": ["src/backend/**/*.ts"],
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true
+  }
+}

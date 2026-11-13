@@ -6,12 +6,14 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 const WIFI_SCAN_HELPER = '/usr/local/sbin/round-carplay-scan-wifi'
 const WIFI_CONNECT_HELPER = '/usr/local/sbin/round-carplay-connect-wifi'
+const PI_NETWORK_HELPER = '/usr/local/sbin/round-carplay-network'
 
 export type WifiNetwork = {
   ssid: string
   signal: number
   security: string
   connected: boolean
+  saved?: boolean
 }
 
 export type IpAddress = {
@@ -45,6 +47,12 @@ export class NetworkService {
     }
 
     try {
+      if (process.env.ROUND_CARPLAY_DEPLOYMENT === 'playport-pi' && existsSync(PI_NETWORK_HELPER)) {
+        const { stdout } = await execFileAsync('sudo', ['-n', PI_NETWORK_HELPER, 'scan'], {
+          timeout: 75_000, maxBuffer: 512 * 1024
+        })
+        return JSON.parse(stdout) as NetworkSnapshot
+      }
       if (!existsSync(WIFI_SCAN_HELPER)) {
         throw new Error('Full Wi-Fi scan helper is not installed; rerun the kiosk installer')
       }
@@ -79,12 +87,15 @@ export class NetworkService {
       }
     }
 
-    const cleanSsid = ssid.trim()
+    const cleanSsid = ssid
     if (!cleanSsid) {
       return { ok: false, message: 'Select a Wi-Fi network', ipAddresses: this.getIpAddresses() }
     }
 
     try {
+      if (process.env.ROUND_CARPLAY_DEPLOYMENT === 'playport-pi' && existsSync(PI_NETWORK_HELPER)) {
+        return await runPiConnect(cleanSsid, password)
+      }
       if (!existsSync(WIFI_CONNECT_HELPER)) {
         throw new Error('Wi-Fi connection helper is not installed; rerun the kiosk installer')
       }
@@ -121,6 +132,19 @@ export class NetworkService {
       return aWifi - bWifi || a.interface.localeCompare(b.interface)
     })
   }
+}
+
+function runPiConnect(ssid: string, password: string): Promise<WifiConnectResult> {
+  return new Promise((resolve, reject) => {
+    const child = execFile('sudo', ['-n', PI_NETWORK_HELPER, 'connect'], {
+      timeout: 150_000, maxBuffer: 512 * 1024
+    }, (error, stdout) => {
+      if (error) { reject(new Error('Wi-Fi connection failed. Check the network and try again.')); return }
+      try { resolve(JSON.parse(stdout) as WifiConnectResult) } catch { reject(new Error('Invalid Wi-Fi response')) }
+    })
+    child.stdin?.on('error', () => undefined)
+    child.stdin?.end(JSON.stringify({ ssid, password }))
+  })
 }
 
 function runWifiConnectHelper(ssid: string, password: string): Promise<void> {

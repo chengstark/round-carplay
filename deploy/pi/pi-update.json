@@ -1,0 +1,5 @@
+{
+  "manifestUrl": "https://github.com/chengstark/round-carplay/releases/download/pi-v3-channel/pi-v3.json",
+  "publicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAk4RiFt8rKJMJGGAwuKZPx3xuKMt4DIop6ynKD+necm8=\n-----END PUBLIC KEY-----\n",
+  "automatic": true
+}

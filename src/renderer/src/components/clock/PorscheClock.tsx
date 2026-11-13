@@ -24,6 +24,7 @@ import {
   TickRing
 } from './faceParts'
 import { C, DIAL_VIEW_BOX, HUB_HIT_R } from './geometry'
+import { useDoubleTap } from './useDoubleTap'
 
 /** How often the mini dial repositions its hands. It has no seconds hand, so
  *  anything under half a minute is invisible work. */
@@ -96,6 +97,7 @@ export default function PorscheClock({
   const hourRef = useRef<SVGGElement>(null)
   const minuteRef = useRef<SVGGElement>(null)
   const secondRef = useRef<SVGGElement>(null)
+  const exit = useDoubleTap(() => onExit?.())
 
   // useId keeps the two dials' gradient ids from colliding in one document.
   const idPrefix = `pc-${useId().replace(/:/g, '')}`
@@ -131,7 +133,16 @@ export default function PorscheClock({
           with a sleeve leaves the clock up. It sets no cursor of its own — the
           `cursor` property inherits, and initCursorHider() drives the whole page
           from body, so anything set here would defeat the auto-hide. */}
-      {onExit && <circle cx={C} cy={C} r={HUB_HIT_R} fill="transparent" onClick={onExit} />}
+      {onExit && (
+        <circle
+          cx={C}
+          cy={C}
+          r={HUB_HIT_R}
+          fill="transparent"
+          onClick={exit.onClick}
+          aria-label="Double tap to return to CarPlay"
+        />
+      )}
     </svg>
   )
 }

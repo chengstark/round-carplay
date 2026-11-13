@@ -1,0 +1,6 @@
+{
+  "upstream": "https://github.com/youcci/playport",
+  "revision": "9a0882dd0ffe48e467b59d58b12d81391df55ade",
+  "note": "Snapshot includes the current local modifications used by ROUNDSCREENCARPLAY; no identity or runtime state.",
+  "sha256": "2a60addc0aac587bcaae78c0b107bca5a336d7da5c69cd8f41b25006c3e65761"
+}

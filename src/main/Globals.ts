@@ -1,4 +1,4 @@
-import { DongleConfig } from '@carplay/messages'
+import type { DongleConfig } from '@carplay/messages'
 
 export type ExtraConfig = DongleConfig & {
   kiosk: boolean,

@@ -1,0 +1,105 @@
+// Exercise the packaged backend without node_modules or any attached hardware.
+const { test } = require('node:test')
+const assert = require('node:assert/strict')
+const { spawn, execFileSync } = require('node:child_process')
+const { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } = require('node:fs')
+const { tmpdir } = require('node:os')
+const path = require('node:path')
+const net = require('node:net')
+const { io } = require('socket.io-client')
+const { WebSocket, WebSocketServer } = require('ws')
+
+async function freePort() {
+  const server = net.createServer()
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+  await new Promise(resolve => server.close(resolve))
+  return port
+}
+
+test('standalone Pi backend: current UI/settings, authenticated PlayPort bridge, no legacy runtime', { timeout: 30_000 }, async t => {
+  const temporary = mkdtempSync(path.join(tmpdir(), 'round-pi-test-'))
+  t.after(() => rmSync(temporary, { recursive: true, force: true }))
+  const backend = path.join(temporary, 'backend.cjs')
+  execFileSync(path.resolve('node_modules/.bin/esbuild'), ['src/backend/index.ts', '--bundle', '--platform=node',
+    '--format=cjs', '--target=node20', '--external:bufferutil', '--external:utf-8-validate', `--outfile=${backend}`])
+  const code = readFileSync(backend, 'utf8')
+  assert.doesNotMatch(code, /require\(["'](?:usb|electron)["']\)/)
+  assert.doesNotMatch(code, /disableLocalBluetooth|rfkill|AutoStartIfNeeded/)
+  const upstream = new WebSocketServer({ host: '127.0.0.1', port: 0 })
+  t.after(() => { for (const c of upstream.clients) c.terminate(); upstream.close() })
+  await new Promise(resolve => upstream.once('listening', resolve))
+  const token = 'test-private-token'
+  let authenticated = false
+  upstream.on('connection', (socket, request) => {
+    authenticated = request.url === '/ws?token=' + token
+    socket.send(JSON.stringify({ type: 'status', sessionActive: true }))
+    socket.on('message', (data, binary) => socket.send(data, { binary }))
+  })
+  const ui = path.join(temporary, 'ui')
+  mkdirSync(ui)
+  writeFileSync(path.join(ui, 'index.html'), '<title>current-round-dashboard</title>')
+  const port = await freePort()
+  const base = `http://127.0.0.1:${port}`
+  const child = spawn(process.execPath, [backend], { cwd: temporary, env: {
+    ...process.env, HOME: temporary, ROUND_CARPLAY_PORT: String(port), ROUND_CARPLAY_DEPLOYMENT: 'playport-pi',
+    ROUND_CARPLAY_DATA_DIR: path.join(temporary, 'data'), ROUND_CARPLAY_UI_DIR: ui,
+    PLAYPORT_WS_URL: `ws://127.0.0.1:${upstream.address().port}/ws?token=${token}`
+  }, stdio: ['ignore', 'pipe', 'pipe'] })
+  let output = ''
+  child.stdout.on('data', d => { output += d })
+  child.stderr.on('data', d => { output += d })
+  t.after(async () => {
+    if (child.exitCode !== null) return
+    child.kill('SIGTERM')
+    await new Promise(resolve => child.once('exit', resolve))
+  })
+  for (let attempt = 0; ; attempt++) {
+    try { if ((await fetch(base + '/health')).ok) break } catch {}
+    if (attempt > 100 || child.exitCode !== null) assert.fail('Backend failed to start: ' + output)
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+  const health = await (await fetch(base + '/health')).json()
+  assert.equal(health.runtime, 'browser')
+  assert.equal(health.playportConfigured, true)
+  assert.ok(!JSON.stringify(health).includes(token))
+  assert.match(await (await fetch(base)).text(), /current-round-dashboard/)
+  const socket = io(base, { transports: ['websocket'], extraHeaders: { Origin: base } })
+  t.after(() => socket.disconnect())
+  await new Promise((resolve, reject) => { socket.once('connect', resolve); socket.once('connect_error', reject) })
+  const rpc = (method, ...args) => new Promise(resolve => socket.emit('rpc', { method, args }, resolve))
+  const settings = await rpc('settings.get')
+  assert.equal(settings.ok, true)
+  assert.equal((await rpc('settings.save', { ...settings.value, backgroundColor: '#123456' })).ok, true)
+  assert.equal(JSON.parse(readFileSync(path.join(temporary, 'data/config.json'))).backgroundColor, '#123456')
+  for (const method of ['carplay.start', 'usb.forceReset', 'bluetooth.connect', 'runtime.switchTo']) {
+    assert.equal((await rpc(method)).ok, false, method + ' must not invoke an obsolete runtime')
+  }
+  const update = await rpc('update.start')
+  assert.equal(update.value.state, 'error')
+  assert.match(update.value.message, /update feed/)
+  const bridge = new WebSocket(`ws://127.0.0.1:${port}/playport`, { origin: base })
+  t.after(() => bridge.terminate())
+  await new Promise((resolve, reject) => {
+    const onStatus = (data, binary) => {
+      if (!binary && JSON.parse(data.toString()).type === 'status') {
+        bridge.off('message', onStatus)
+        resolve()
+      }
+    }
+    bridge.on('message', onStatus)
+    bridge.once('error', reject)
+  })
+  assert.equal(authenticated, true)
+  const reply = new Promise(resolve => bridge.once('message', (data, binary) => resolve({ data, binary })))
+  bridge.send(Buffer.from([0, 1, 2, 255]))
+  const echoed = await reply
+  assert.equal(echoed.binary, true)
+  assert.deepEqual(echoed.data, Buffer.from([0, 1, 2, 255]))
+  const forbidden = new WebSocket(`ws://127.0.0.1:${port}/playport`, { origin: 'https://untrusted.example' })
+  const status = await new Promise(resolve => {
+    forbidden.on('unexpected-response', (_request, response) => { response.resume(); forbidden.terminate(); resolve(response.statusCode) })
+    forbidden.on('error', () => {})
+  })
+  assert.equal(status, 403)
+})

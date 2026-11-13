@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { DEFAULT_CONFIG } from '../main/carplay/messages'
+import { DEFAULT_CONFIG } from '../main/carplay/DongleDriver'
 import {
   CAMERA_RESOLUTIONS,
   type CameraResolution,

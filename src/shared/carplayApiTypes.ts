@@ -1,4 +1,5 @@
 import type { ExtraConfig } from '../main/Globals'
+import type { BrightnessDirection, BrightnessStatus } from '../main/brightness/BrightnessService'
 import type { GpsState } from '../main/gps/GpsService'
 import type {
   BluetoothActionResult,
@@ -36,6 +37,11 @@ export type UsbDeviceInfo = {
 }
 
 export interface CarplayApi {
+  brightness?: {
+    getStatus(): Promise<BrightnessStatus>
+    start(direction: BrightnessDirection): Promise<BrightnessStatus>
+    stop(immediate?: boolean): Promise<BrightnessStatus>
+  }
   quit(): Promise<unknown>
   onUSBResetStatus(callback: ApiCallback<boolean>): void
   usb: {

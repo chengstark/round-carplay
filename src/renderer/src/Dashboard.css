@@ -1,0 +1,246 @@
+.dashboard-page {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  touch-action: none;
+  cursor: default;
+}
+
+.round-dashboard {
+  position: relative;
+  width: min(100vw, 100vh);
+  height: min(100vw, 100vh);
+  overflow: hidden;
+  border-radius: 50%;
+  container-type: inline-size;
+  /* A one-CSS-pixel outline becomes a broken half-pixel ring after the
+     controller's exact 2:1 reduction to the 480px panel. */
+  box-shadow: none;
+}
+
+/* The pix halo controller stretches its entire 4:3 HDMI input to the square
+   480x480 panel. Pre-stretch the square UI by the inverse amount so that the
+   controller's squeeze restores true circles and undistorted text. The base
+   layout remains 960x960, so 1280x960 input becomes an exact 2:1 reduction. */
+@media (aspect-ratio: 4 / 3) {
+  .round-dashboard {
+    transform: scaleX(1.3333333333);
+    transform-origin: center;
+  }
+}
+
+.top-hud {
+  position: absolute;
+  z-index: 12;
+  top: 5.8%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: 2.2cqw;
+  color: #fff;
+  font-size: clamp(20px, 4.8cqw, 44px);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.92), 0 0 2px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+}
+
+.top-hud-divider {
+  width: 1px;
+  height: 0.8em;
+  align-self: center;
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.speed-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.7cqw;
+}
+
+.speed-value small {
+  font-size: 0.38em;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.dashboard-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #000;
+}
+
+.clock-overlay {
+  padding: 1.5%;
+}
+
+.camera-overlay {
+  display: grid;
+  place-items: center;
+}
+
+.settings-overlay {
+  z-index: 50;
+}
+
+.dashboard-dock {
+  position: absolute;
+  z-index: 40;
+  inset: 0;
+  pointer-events: none;
+}
+
+.dashboard-dock[hidden] { display: none; }
+
+.dock-toggle {
+  position: absolute;
+  z-index: 39;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 16cqw;
+  height: 10cqw;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dock-toggle::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  /* Same diameter as a dock button, with its upper semicircle visible. */
+  width: 11.5cqw;
+  height: 5.75cqw;
+  border: .42cqw solid #68764f;
+  border-bottom: 0;
+  border-radius: 10cqw 10cqw 0 0;
+  background: #0b1719;
+}
+
+.dock-toggle::after {
+  content: '';
+  position: absolute;
+  bottom: 1.8cqw;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2.4cqw;
+  height: .44cqw;
+  border-radius: 1cqw;
+  background: #d9f58f;
+}
+
+.dock-toggle[aria-expanded='true']::before {
+  background: #d9f58f;
+  border-color: #efffc7;
+  /* Slide below the revealed Phone button so the two controls stay separate. */
+  bottom: -3.5cqw;
+}
+.dock-toggle[aria-expanded='true']::after { background: #162014; bottom: .6cqw; }
+/* Keep the expanded tab's click center below the bottom Phone button. */
+.dock-toggle[aria-expanded='true'] { height: 4cqw; }
+.dock-toggle:focus-visible { outline: .35cqw solid #d9f58f; outline-offset: -.5cqw; border-radius: 50% 50% 0 0; }
+
+.dashboard-dock[data-map='false'] .dock-button:not([data-active='true']) {
+  display: none;
+}
+
+.dock-button {
+  position: absolute;
+  left: calc(50% + var(--arc-x));
+  top: calc(50% + var(--arc-y));
+  width: 11.5cqw;
+  aspect-ratio: 1;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55cqw;
+  /* About two physical pixels on the 480px panel. An opaque ring keeps
+     map colors from breaking up its contrast during HDMI downscaling. */
+  border: 0.42cqw solid #68764f;
+  border-radius: 50%;
+  color: #e7ebe6;
+  background: rgba(8, 14, 11, 0.9);
+  box-shadow: 0 0.8cqw 2.4cqw rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(14px);
+  touch-action: manipulation;
+  pointer-events: auto;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.dock-button:nth-child(1) {
+  --arc-x: -34.404cqw;
+  --arc-y: 24.09cqw;
+}
+
+.dock-button:nth-child(2) {
+  --arc-x: -19.393cqw;
+  --arc-y: 37.254cqw;
+}
+
+.dock-button:nth-child(3) {
+  --arc-x: 0cqw;
+  --arc-y: 42cqw;
+}
+
+.dock-button:nth-child(4) {
+  --arc-x: 19.393cqw;
+  --arc-y: 37.254cqw;
+}
+
+.dock-button:nth-child(5) {
+  --arc-x: 34.404cqw;
+  --arc-y: 24.09cqw;
+}
+
+.dashboard-dock[data-map='false'] .dock-button[data-active='true'] {
+  --arc-x: 0cqw;
+  --arc-y: 42cqw;
+}
+
+.dock-button svg {
+  font-size: 5cqw;
+}
+
+.dock-button span {
+  font-size: 2cqw;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.dock-button[data-active='true'] {
+  color: #162014;
+  background: #d9f58f;
+  border-color: #efffc7;
+}
+
+.dock-button:active {
+  transform: translate(-50%, -50%) scale(0.96);
+}
+
+@media (max-width: 520px), (max-height: 520px) {
+  .dock-button {
+    width: 11.5cqw;
+  }
+}

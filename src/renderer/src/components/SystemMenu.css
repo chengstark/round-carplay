@@ -1,0 +1,132 @@
+.round-settings {
+  position: absolute;
+  inset: 0;
+  color: #f1f2eb;
+  background: #101511;
+  font-family: inherit;
+  line-height: 1.2;
+  -webkit-font-smoothing: antialiased;
+}
+
+.round-settings *, .round-settings *::before, .round-settings *::after { box-sizing: border-box; }
+.round-settings button, .round-settings input {
+  font: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.round-settings button {
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.round-settings button:disabled { cursor: default; opacity: .4; }
+.round-settings button:focus-visible, .round-settings input:focus-visible { outline: .5cqw solid #d9f58f; outline-offset: .5cqw; }
+.round-settings button:active:not(:disabled) { background: #35432c; }
+.round-settings svg { width: 5cqw; height: 5cqw; flex: none; }
+.settings-header {
+  position: absolute;
+  top: 10%;
+  left: 20%;
+  width: 60%;
+  height: 11.5%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1cqw;
+}
+.settings-header h1 { margin: 0; font-size: 4.8cqw; font-weight: 650; letter-spacing: -.035em; white-space: nowrap; }
+.settings-back {
+  display: grid;
+  place-items: center;
+  width: 11.5cqw;
+  height: 11.5cqw;
+  flex: none;
+  border: .35cqw solid #45513f;
+  border-radius: 50%;
+  background: #20291f;
+  color: #e7efdb;
+}
+.settings-header-balance { width: 11.5cqw; flex: none; }
+.settings-body {
+  position: absolute;
+  top: 25%;
+  left: 15%;
+  width: 70%;
+  bottom: 15%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+  scrollbar-color: #546347 transparent;
+  padding: .6cqw;
+}
+.settings-home { top: 24%; bottom: 14%; display: flex; flex-direction: column; gap: 1.5cqw; }
+.settings-categories { display: flex; flex-direction: column; gap: 1.25cqw; }
+.settings-category {
+  display: flex;
+  align-items: center;
+  gap: 3cqw;
+  width: 100%;
+  min-height: 11.5cqw;
+  padding: 1.5cqw 3cqw;
+  text-align: left;
+  color: #f1f2eb;
+  border: .3cqw solid #3a4635;
+  border-radius: 3cqw;
+  background: #1d261c;
+}
+.settings-category > span:not(.settings-connected-dot) { min-width: 0; flex: 1; }
+.settings-category strong { display: block; font-size: 3.65cqw; font-weight: 600; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-category small { display: block; color: #b6bfae; font-size: 2.5cqw; line-height: 1.4; }
+.settings-category > svg:first-child { color: #d9f58f; }
+.settings-category > svg:last-child { width: 3.5cqw; color: #9ca990; }
+.settings-connected-dot, .brightness-status::before { width: 1.8cqw; height: 1.8cqw; background: #c8ec8c; border-radius: 50%; flex: none; }
+.settings-eyebrow { font-size: 2.5cqw; letter-spacing: .13em; color: #b5c1a8; margin: 1cqw 0 3cqw; font-weight: 600; }
+.settings-description, .settings-note { font-size: 3.2cqw; color: #bac3b4; line-height: 1.45; margin: 0 0 3cqw; overflow-wrap: anywhere; }
+.settings-note[data-error='true'] { color: #ffb4a7; }
+.settings-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2cqw;
+  width: 100%;
+  min-height: 11.5cqw;
+  padding: 2cqw 3cqw;
+  margin-bottom: 2cqw;
+  border: .35cqw solid #536345;
+  border-radius: 3cqw;
+  color: #f1f2eb;
+  background: #20291f;
+  font-size: 3.5cqw !important;
+  font-weight: 600 !important;
+}
+.settings-primary { background: #d9f58f; border-color: #d9f58f; color: #172013; }
+.round-settings .settings-primary:active:not(:disabled) { background: #b7d96e; }
+.settings-page-intro > p { font-size: 3.3cqw; color: #bac3b4; margin: 0 0 2cqw; }
+.settings-network-list { display: grid; gap: 2cqw; margin-bottom: 3cqw; }
+.settings-network-title, .settings-confirm h2 { font-size: 4.6cqw; margin: 0 0 4cqw; overflow-wrap: anywhere; }
+.settings-field { display: block; font-size: 3.3cqw; margin-bottom: 2cqw; }
+.settings-field span { display: block; margin-bottom: 1.5cqw; }
+.settings-field input { width: 100%; min-height: 12cqw; border: .35cqw solid #6d7d5e; background: #080d08; color: #fff; border-radius: 2.5cqw; padding: 2cqw 3cqw; font-size: 3.8cqw; }
+.settings-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5cqw; }
+.settings-presets .settings-preset { min-height: 14cqw; padding: 2cqw .5cqw; margin-bottom: 0; font-size: 2.9cqw !important; }
+.settings-preset[aria-pressed='true'] { background: #d9f58f; color: #172013; border-color: #d9f58f; }
+.settings-stepper { display: flex; align-items: center; justify-content: space-between; gap: 3cqw; margin: 4cqw 0; }
+.settings-stepper button { width: 13cqw; height: 13cqw; border: .35cqw solid #536345; background: #20291f; color: #f1f2eb; border-radius: 50%; font-size: 7cqw; }
+.settings-stepper output { font-size: 8cqw; font-weight: 600; font-variant-numeric: tabular-nums; }
+.settings-stepper output small { font-size: 3.3cqw; margin-left: 1cqw; color: #b6bfae; }
+.settings-device-info { margin-top: 5cqw; padding-top: 4cqw; border-top: .3cqw solid #45513f; }
+.settings-device-info > p:not(.settings-eyebrow) { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1cqw; font-size: 3cqw; color: #c0c9b9; font-variant-numeric: tabular-nums; }
+.settings-brightness { flex: none; }
+.brightness-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1cqw; align-items: center; margin-bottom: 1.5cqw; }
+.brightness-heading h2 { margin: 0; font-size: 3.5cqw; font-weight: 600; }
+.brightness-status { display: flex; gap: 1.3cqw; align-items: center; font-size: 2.6cqw; color: #bdc9b3; }
+.brightness-status::before { content: ''; }
+.brightness-status[data-ready='false']::before { background: #d7ac79; }
+.brightness-buttons { display: flex; gap: 2cqw; }
+.brightness-buttons button { flex: 1; width: auto; min-height: 12cqw; margin: 0; touch-action: none; font-size: 3.8cqw !important; }
+.brightness-buttons button[data-active='true'] { background: #d9f58f; border-color: #d9f58f; color: #172013; }
+.brightness-hint { font-size: 2.4cqw; color: #a7b49a; margin: 1cqw 0 0; line-height: 1.35; }
+.brightness-error { color: #e2bb91; font-size: 2.7cqw; line-height: 1.4; margin: 1.5cqw 0; }

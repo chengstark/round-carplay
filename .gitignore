@@ -12,8 +12,8 @@ build/
 *.apk
 *.xml
 
-# npm creates this locally because this project does not track a lockfile
-package-lock.json
+# The v3 GitHub builder uses a pinned dependency graph.
+!package-lock.json
 
 # Logs
 *.log

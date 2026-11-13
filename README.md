@@ -1,206 +1,70 @@
-<p align="center">
-  <!-- Release -->
-  <img alt="Release" src="https://img.shields.io/github/v/release/OneMakerShow/round-carplay?label=release">
-  <!-- Version -->
-  <img alt="Version" src="https://img.shields.io/github/package-json/v/OneMakerShow/round-carplay?label=version">
-  <!-- Build Main -->
-  <img alt="Build Main" src="https://img.shields.io/github/actions/workflow/status/OneMakerShow/round-carplay/build.yml?branch=main&label=build%20main&style=flat">
-  <!-- Typecheck Main -->
-  <img alt="Typecheck Main" src="https://img.shields.io/github/actions/workflow/status/OneMakerShow/round-carplay/typecheck.yml?branch=main&label=typecheck%20main&style=flat">
-  <!-- Build Dev -->
-  <img alt="Build Dev" src="https://img.shields.io/github/actions/workflow/status/OneMakerShow/round-carplay/build.yml?branch=dev&label=build%20dev&style=flat">
-  <!-- Typecheck Dev -->
-  <img alt="Typecheck Dev" src="https://img.shields.io/github/actions/workflow/status/OneMakerShow/round-carplay/typecheck.yml?branch=dev&label=typecheck%20dev&style=flat">
-  <!-- License -->
-  <img alt="License" src="https://img.shields.io/github/license/OneMakerShow/round-carplay">
-</p>
+# Round CarPlay v3
 
+A round CarPlay dashboard using a Chromium browser, a local Node backend and
+our current PlayPort host. The map fills the circular dashboard; native Phone
+and Media panels, navigation details, clock, USB camera and system controls
+share the round interface.
 
-# Round Carplay
+The current runtime lives on the `browser-kiosk` branch. Retained Electron
+build tooling and older source modules are historical; the v3 Pi runtime is
+the browser dashboard plus PlayPort. It uses the phone's Bluetooth/Wi-Fi
+CarPlay connection directly.
 
-Round Caraplay is an attempt to adapt the classic Apple CarPlay to a round screen using a Raspberry Pi. The idea is to display CarPlay in a central square area and then fill the surrounding space with information coming from the vehicle’s OBD bus.
+## Raspberry Pi
 
-The production runtime is a Chromium kiosk with a local Node.js hardware backend,
-optimized for Raspberry Pi and ultra-low-resolution OEM displays.
+Target: Raspberry Pi OS Trixie **64-bit**, initially a Pi 3 Model B. Install the
+private bootstrap package using [the deployment guide](deploy/pi/README.md).
+This runs the host, backend and kiosk as services at boot. Accessory identity,
+phone pairing and private controller/network settings stay on the device and
+are excluded from public update packages.
 
-> **Requirements:** A Carlinkit **CPC200-CCPA** (wireless & wired) or **CPC200-CCPW** (wired only) adapter.
+Physical Pi testing established a live phone session and visible dashboard.
+Connection reliability, round-screen touch/geometry, audio, camera, moving
+speed OCR and the new maintenance flows still need target validation.
 
-## USB backup camera
+## Wi-Fi and updates
 
-The right-side crescent button opens the selected UVC/USB backup camera directly
-through Chromium's media-device API. Double-tap the button to open or close the
-feed. Opening the stream powers the camera; closing it stops every media track
-and releases the device.
+Settings → Wi-Fi provides a normal network chooser with saved passwords,
+reconnect, and fallback to the previous profile if joining fails. PlayPort
+refreshes its network/address settings after a switch.
 
-The existing image calibration is preserved: crop-to-fill at every angle,
-continuous `0°`–`359°` rotation, one-degree adjustment buttons, horizontal and
-vertical flips, resolution selection, and parking guides. The Camera tab and
-reverse-triggered view use the same adjusted canvas. The live strip reports the
-device name, negotiated resolution, and measured frame rate.
+Settings → System checks the dedicated signed v3 update feed. GitHub builds
+our branch and the Pi downloads a ready-to-run ARM64 package. Automatic updates
+wait while CarPlay is active. The previous release is retained and restored
+when startup health checks fail. See [maintenance setup](deploy/pi/MAINTENANCE.md)
+for the one-time bootstrap, signing secret and hosted release activation.
 
-The installer grants the kiosk user access to Linux video devices and launches
-Chromium with camera permission pre-approved for the local kiosk. On a fresh or
-disconnected selection, the app prefers a camera labelled `2504`, then another
-USB camera, before falling back to the first available video input.
+The GitHub workflow and maintenance code are prepared locally. Publication and
+physical validation are required before treating this as a proven OTA channel.
 
-## GPS speedometer
+## Development
 
-Tap the car artwork below the CarPlay square to switch between the artwork and
-a live MPH readout. On Raspberry Pi, the app reads 9600-baud NMEA from
-`/dev/serial0`; the serial hardware must be enabled and the serial login shell
-disabled. The display shows `-- MPH` until the receiver has a valid GPS fix.
-
-## On-display system menu
-
-The menu button in the upper surround opens a panel over the CarPlay square;
-CarPlay remains mounted and reappears immediately when the panel closes. The
-panel can change the surround color, scan and connect to NetworkManager Wi-Fi
-networks, and display the Pi's active IPv4 addresses. Raspberry Pi OS Bookworm
-and newer use NetworkManager by default.
-
-Round CarPlay operates as a display and controller only. It tells the Carlinkit
-dongle not to send audio to the Pi, does not create a local CarPlay audio player,
-and ignores any PCM packets a dongle may still emit. Pair the phone directly
-with the car stereo for music, navigation, calls, and Siri audio. If the stereo
-was previously paired with the Pi, remove that pairing so it cannot compete
-with the phone's Bluetooth connection.
-
-The kiosk powers off the Raspberry Pi Bluetooth controller at application
-startup. A full kiosk installer run additionally stops and masks BlueZ and
-rfkill-blocks the Pi radio. This does not disable the Carlinkit adapter's own
-wireless CarPlay radio because the adapter is separate USB hardware.
-
-## Installation (Raspberry Pi OS)
-
-```bash
-curl -LO https://raw.githubusercontent.com/OneMakerShow/round-carplay/main/setup-pi.sh
-sudo chmod +x setup-pi.sh
-./setup-pi.sh
+```sh
+npm ci --ignore-scripts --legacy-peer-deps
+./node_modules/.bin/tsc --noEmit -p tsconfig.backend.json
+./node_modules/.bin/tsc --noEmit -p tsconfig.web.json --composite false
+npm run test:pi
 ```
 
-The `setup-pi.sh` script performs the following tasks:
+Build the standalone backend and web UI:
 
-1. checks for required tools, including the Cage Wayland kiosk compositor
-2. configures udev rules to ensure the proper access rights for the CarPlay dongle
-3. preserves the installed AppImage, or downloads the latest release on a fresh install
-4. makes a direct-to-app kiosk session the default boot experience
-5. creates a desktop shortcut for easy access to the application
-
-The kiosk session does not start the Raspberry Pi desktop, panel, update
-notifier, NetworkManager applet, or notification daemon. Wi-Fi connection and
-available-update pop-ups therefore cannot cover CarPlay. NetworkManager and the
-operating system's background update services remain enabled, and Wi-Fi can
-still be managed from Round CarPlay's on-display system menu.
-
-The installer leaves the current desktop session running and applies kiosk mode
-on the next reboot:
-
-```bash
-sudo reboot
+```sh
+./node_modules/.bin/esbuild src/backend/index.ts --bundle --platform=node --format=cjs --target=node20 --external:bufferutil --external:utf-8-validate --outfile=out/pi/backend.cjs
+./node_modules/.bin/vite build --config vite.renderer.config.ts
+ROUND_CARPLAY_UI_DIR="$PWD/out/renderer" node out/pi/backend.cjs
 ```
 
-To restore the full desktop for troubleshooting, run this command and reboot:
+The dashboard binds to `http://127.0.0.1:4000`. Configure `PLAYPORT_WS_URL` with
+your local host endpoint/token to connect a phone; the backend keeps the token
+out of the renderer. The current PlayPort CI source is captured in
+[vendor](vendor/README.md); refresh that snapshot when the active host changes.
 
-```bash
-sudo round-carplay-desktop
-sudo reboot
-```
+Unavailable navigation/speed data remains absent or `--`; the UI does not invent
+values. Current speed uses local OCR of the native Google Maps stream rather
+than requiring a separate phone app. Real moving-value accuracy is unverified.
 
-*Do not run this script on other Linux distributions.*
+## Licence
 
-## Images
-<p align="center">
-  <strong><span style="font-size:20px;">Reference, Mini Cooper Navigator System</span></strong>
-</p>
-
-<p align="center">
-  <img src="documentation/images/reference.jpg"
-       alt="CarPlay"
-       width="45%" />
-</p>
-
-<p align="center">
-  <strong><span style="font-size:20px;">Real Device First Tests</span></strong>
-</p>
-
-<p align="center">
-  <img src="documentation/images/01.jpg"
-       alt="Settings"
-       width="20%" />
-  &emsp;&emsp;
-  <img src="documentation/images/02.jpg"
-       alt="Settings"
-       width="20%" />
-    &emsp;&emsp;
-  <img src="documentation/images/03.jpg"
-       alt="Settings"
-       width="20%" />
-    &emsp;&emsp;
-  <img src="documentation/images/04.jpg"
-       alt="Settings"
-       width="20%" />
-</p>
-
-
-### System Requirements (build)
-
-Make sure the following packages and tools are installed on your system before building:
-
-- **Python 3.x** (for native module builds via `node-gyp`)
-- **build-essential** (Linux: includes `gcc`, `g++`, `make`, etc.)
-- **libusb-1.0-0-dev** (required for `node-usb`)
-- **libudev-dev** (optional but recommended for USB detection on Linux)
-- **fuse** (required to run AppImages)
-
----
-
-### Clone & Build
-
-```bash
-git clone --branch main --single-branch https://github.com/OneMakerShow/round-carplay.git \
-  && cd pi-carplay \
-  && npm run install:clean \
-  && npm run build \
-  && npm run build:armLinux
-```
-
----
-
-### Linux (x86_64)
-
-This AppImage has been tested on Debian Trixie (13). No additional software is required — just download the x86_64.AppImage and make it executable.
-
-```bash
-chmod +x round-carplay-*-x86_64.AppImage
-```
-
----
-
-### Mac (arm64)
-
-This step is required for all non-Apple-signed apps.
-
-```bash
-xattr -cr /Applications/round-carplay.app
-```
-
-For microphone support, please install Sound eXchange (SoX) via brew.
-```bash
-brew install sox
-```
-
----
-
-## Links
-
-* **Repository & Issue Tracker:** [OneMakerShow/round-carplay](https://github.com/OneMakerShow/round-carplay)
-* **Inspired by:** [pi-carplay](https://github.com/f-io/pi-carplay)
-
-## Disclaimer
-
-** _Apple and CarPlay are trademarks of Apple Inc. This project is not affiliated with or endorsed by Apple in any way. All trademarks are the property of their respective owners._
-
-
-## License
-
-This project is licensed under the MIT License.
+MIT; see [LICENSE](LICENSE). PlayPort's source licence is preserved in its vendor
+snapshot. Apple and CarPlay are trademarks of Apple Inc.; this project is not
+affiliated with or endorsed by Apple.

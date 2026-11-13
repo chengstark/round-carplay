@@ -1,0 +1,87 @@
+name: Pi v3 update
+
+on:
+  push:
+    branches: [browser-kiosk]
+  workflow_dispatch:
+
+concurrency:
+  group: pi-v3-channel
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/browser-kiosk'
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libbluetooth-dev
+          npm ci --ignore-scripts --legacy-peer-deps --no-audit
+      - name: Verify dashboard and maintenance logic
+        run: |
+          ./node_modules/.bin/tsc --noEmit -p tsconfig.backend.json
+          ./node_modules/.bin/tsc --noEmit -p tsconfig.web.json --composite false
+          node --test scripts/test-pi-deployment.cjs scripts/test-pi-updates.cjs scripts/test-navigation-overlay.cjs scripts/test-speed-ocr.cjs
+          python3 -m unittest discover -s deploy/pi -p 'test_*.py'
+      - name: Build the current PlayPort source snapshot
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,pathlib,tarfile
+          archive=pathlib.Path('vendor/playport-source.tar.gz')
+          metadata=json.loads(pathlib.Path('vendor/playport-source.json').read_text())
+          assert hashlib.sha256(archive.read_bytes()).hexdigest()==metadata['sha256']
+          pathlib.Path('dist/playport-source').mkdir(parents=True,exist_ok=True)
+          with tarfile.open(archive) as tar:
+              tar.extractall('dist/playport-source', filter='data')
+          PY
+          cd dist/playport-source
+          bash gradlew --no-daemon :server:installDist
+          bash linux/bt-bridge/build.sh
+      - name: Package and sign the ARM64 update
+        env:
+          PI_UPDATE_SIGNING_KEY: ${{ secrets.PI_UPDATE_SIGNING_KEY }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          export PI_UPDATE_VERSION="v3-${GITHUB_SHA:0:12}-${GITHUB_RUN_NUMBER}"
+          export PI_UPDATE_BASE_URL="https://github.com/${REPOSITORY}/releases/download/${PI_UPDATE_VERSION}"
+          node scripts/package-pi-ota.mjs
+          printf '%s\n' "$PI_UPDATE_VERSION" > dist/pi-ota/version.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pi-v3-update
+          path: dist/pi-ota/
+          retention-days: 14
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pi-v3-update
+          path: update
+      - name: Publish immutable package, then advance the v3 channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          VERSION="$(cat update/version.txt)"
+          gh release create "$VERSION" update/*.tar.gz --latest=false --target "$GITHUB_SHA" --title "$VERSION" --notes 'Prebuilt current v3 dashboard and PlayPort host for Raspberry Pi OS 64-bit.'
+          gh release view pi-v3-channel >/dev/null 2>&1 || gh release create pi-v3-channel --latest=false --target "$GITHUB_SHA" --title 'Pi v3 update channel' --notes 'Signed feed consumed by the dashboard Update button.'
+          gh release upload pi-v3-channel update/pi-v3.json --clobber
