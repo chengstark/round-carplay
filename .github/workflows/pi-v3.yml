@@ -49,7 +49,7 @@ jobs:
               tar.extractall('dist/playport-source', filter='data')
           PY
           cd dist/playport-source
-          bash gradlew --no-daemon :server:installDist
+          bash gradlew --no-daemon :server:test :server:installDist
           bash linux/bt-bridge/build.sh
       - name: Package and sign the ARM64 update
         env:
