@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, statSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
 import { extname, join, normalize, resolve, sep } from 'node:path'
@@ -227,6 +227,12 @@ function serveHttp(request: IncomingMessage, response: ServerResponse): void {
     'Cross-Origin-Resource-Policy': 'same-origin',
     'X-Content-Type-Options': 'nosniff'
   })
+  if (isPiDeployment && file.endsWith('index.html')) {
+    // Hide the pointer throughout the Pi touchscreen kiosk, including menus.
+    const style = '<style id="pi-hide-cursor">html,body,body *,body *::before,body *::after{cursor:none!important}</style>'
+    response.end(readFileSync(file, 'utf8').replace('</head>', `${style}</head>`))
+    return
+  }
   createReadStream(file).pipe(response)
 }
 
