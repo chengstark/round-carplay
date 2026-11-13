@@ -217,8 +217,8 @@ Environment="XDG_RUNTIME_DIR=/run/user/$(id -u)"
 Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus"
 Environment="XDG_SESSION_TYPE=wayland"
 Environment="WLR_LIBINPUT_NO_DEVICES=1"
+Environment="LIBSEAT_BACKEND=logind"
 ExecStart=/usr/bin/python3 $ROOT/current/deploy/launch.py kiosk
-ExecStartPost=+/usr/bin/chvt 1
 Restart=always
 RestartSec=3
 TimeoutStopSec=10
