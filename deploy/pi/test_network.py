@@ -44,6 +44,8 @@ class NetworkRestartTests(unittest.TestCase):
             commands = []
             def run(*args, **_kwargs):
                 commands.append(args)
+                if args == ('iw', 'dev', 'wlan0', 'get', 'power_save'):
+                    return 'Power save: off'
                 return ''
 
             with patch.multiple(network, NETWORK_FILE=network_file, PENDING_RESTART=pending, USER_FILE=user_file), \
@@ -57,6 +59,8 @@ class NetworkRestartTests(unittest.TestCase):
                 self.assertTrue(network.sync_network())
                 self.assertTrue(pending.exists())
                 self.assertFalse(any(c[0] == 'systemctl' for c in commands))
+                self.assertNotIn(('iw', 'dev', 'wlan0', 'set', 'power_save', 'off'), commands,
+                                 'an already configured radio must not be rewritten on every recovery tick')
                 self.assertFalse(network.sync_network())
                 self.assertFalse(pending.exists())
                 self.assertEqual([c for c in commands if c[0] == 'systemctl'], [

@@ -125,7 +125,8 @@ def sync_network(restart=True):
         nm('connection', 'modify', 'uuid', uuid, '802-11-wireless.powersave', '2',
            'connection.autoconnect', 'yes', 'connection.autoconnect-retries', '0')
     try:
-        run('iw', 'dev', INTERFACE, 'set', 'power_save', 'off', timeout=5)
+        if 'Power save: off' not in run('iw', 'dev', INTERFACE, 'get', 'power_save', timeout=5):
+            run('iw', 'dev', INTERFACE, 'set', 'power_save', 'off', timeout=5)
     except (RuntimeError, subprocess.TimeoutExpired):
         pass
     ips = [a['address'] for a in addresses() if a['interface'] == INTERFACE]

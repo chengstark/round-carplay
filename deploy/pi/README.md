@@ -38,6 +38,8 @@ distribution; the Pi runs them directly. There is no prebuilt OS image yet.
   updates retain the installed helper and do not replace root-owned code.
 - Network recovery restarts PlayPort only after its status API explicitly
   confirms idle; a slow status API during boot cannot interrupt phone startup.
+  Recovery reads the radio's power-saving state and only disables it when
+  needed, avoiding repeated writes to an already configured Wi-Fi device.
 - The dashboard backend starts independently of PlayPort's network startup.
   The Pi JVM uses first-tier compilation to reduce cold-start work. A failed
   saved-phone Bluetooth attempt pauses two seconds before retrying; an ended
