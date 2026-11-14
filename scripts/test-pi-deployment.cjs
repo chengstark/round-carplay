@@ -72,10 +72,13 @@ test('standalone Pi backend: current UI/settings, authenticated PlayPort bridge,
   writeFileSync(path.join(ui, 'index.html'), '<title>current-round-dashboard</title>')
   const port = await freePort()
   const base = `http://127.0.0.1:${port}`
+  const cursorRefresh = path.join(temporary, 'cursor-refresh')
+  writeFileSync(cursorRefresh, '')
   const child = spawn(process.execPath, [backend], { cwd: temporary, env: {
     ...process.env, HOME: temporary, ROUND_CARPLAY_PORT: String(port), ROUND_CARPLAY_DEPLOYMENT: 'playport-pi',
     ROUND_CARPLAY_DATA_DIR: path.join(temporary, 'data'), ROUND_CARPLAY_UI_DIR: ui,
-    PLAYPORT_WS_URL: `ws://127.0.0.1:${upstream.address().port}/ws?token=${token}`
+    PLAYPORT_WS_URL: `ws://127.0.0.1:${upstream.address().port}/ws?token=${token}`,
+    ROUND_CARPLAY_CURSOR_REFRESH_PATH: cursorRefresh
   }, stdio: ['ignore', 'pipe', 'pipe'] })
   let output = ''
   child.stdout.on('data', d => { output += d })
@@ -93,6 +96,9 @@ test('standalone Pi backend: current UI/settings, authenticated PlayPort bridge,
   const health = await (await fetch(base + '/health')).json()
   assert.equal(health.runtime, 'browser')
   assert.equal(health.playportConfigured, true)
+  assert.equal((await fetch(base + '/api/developer/pointer-refresh', { method: 'POST', headers: { Origin: 'https://untrusted.example' } })).status, 403)
+  assert.equal((await fetch(base + '/api/developer/pointer-refresh', { method: 'POST', headers: { Origin: base } })).status, 204)
+  assert.match(readFileSync(cursorRefresh, 'utf8'), /^\d+$/)
   assert.ok(!JSON.stringify(health).includes(token))
   assert.match(await (await fetch(base)).text(), /current-round-dashboard/)
   const phoneState = path.join(temporary, '.local/share/round-carplay-pi/state')

@@ -5,9 +5,10 @@ const vm = require('node:vm')
 const ts = require('typescript')
 
 test('pointer defaults hidden, developer switch enables it, and disabling clears the saved override', () => {
-  const styles = new Map(), stored = new Map(), exports = {}
+  const styles = new Map(), stored = new Map(), exports = {}, refreshes = []
   const context = {
     exports,
+    fetch: (url, options) => { refreshes.push({ url, method: options.method }); return Promise.resolve({}) },
     document: {
       getElementById: id => styles.get(id),
       createElement: () => ({ id: '', textContent: '' }),
@@ -23,9 +24,11 @@ test('pointer defaults hidden, developer switch enables it, and disabling clears
   }).outputText
   vm.runInNewContext(source, context)
   exports.applyDeveloperControls()
+  assert.equal(refreshes[0].url, '/api/developer/pointer-refresh')
   const style = styles.get('pi-hide-cursor')
   assert.match(style.textContent, /cursor:none!important/)
   exports.saveDeveloperControls({ enabled: true, showMousePointer: true })
+  assert.equal(refreshes.length, 2, 'a cursor visibility change refreshes compositor pointer focus')
   assert.equal(style.textContent, '')
   exports.applyDeveloperControls()
   assert.equal(style.textContent, '', 'saved pointer preference survives initialization')

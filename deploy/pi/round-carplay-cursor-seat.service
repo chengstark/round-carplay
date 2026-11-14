@@ -1,0 +1,19 @@
+[Unit]
+Description=Round CarPlay touch-only cursor support
+After=systemd-udev-trigger.service
+Before=round-carplay-browser-kiosk.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/sbin/modprobe uinput
+ExecStart=/usr/bin/python3 /usr/local/lib/round-carplay/cursor-seat.py
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+RuntimeDirectory=round-carplay-cursor
+ReadWritePaths=/run/round-carplay-cursor
+
+[Install]
+WantedBy=graphical.target

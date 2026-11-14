@@ -30,6 +30,10 @@ distribution; the Pi runs them directly. There is no prebuilt OS image yet.
   separate car stereo or Bluetooth speaker.
 - Settings → Developer contains an enable switch and a persistent Show mouse
   pointer switch. The pointer is hidden by default.
+  The installer enables a root-owned cursor-seat helper for touch-only Cage:
+  a virtual mouse keeps cursor focus available without generating clicks.
+  Existing installations predating that service need the installer once; OTA
+  updates retain the installed helper and do not replace root-owned code.
 - Network recovery restarts PlayPort only after its status API explicitly
   confirms idle; a slow status API during boot cannot interrupt phone startup.
 - Use the current Insignia USB Bluetooth adapter for the first test if the Pi's

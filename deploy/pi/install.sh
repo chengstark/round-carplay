@@ -103,6 +103,8 @@ sudo install -d -m 0755 /usr/local/lib/round-carplay /etc/NetworkManager/dispatc
 sudo install -m 0755 "$RELEASE/deploy/network.py" /usr/local/sbin/round-carplay-network
 sudo install -m 0755 "$RELEASE/deploy/update.py" /usr/local/sbin/round-carplay-update
 sudo install -m 0644 "$RELEASE/deploy/update.py" /usr/local/lib/round-carplay/update.py
+sudo install -m 0755 "$RELEASE/deploy/cursor-seat.py" /usr/local/lib/round-carplay/cursor-seat.py
+sudo install -m 0644 "$RELEASE/deploy/round-carplay-cursor-seat.service" /etc/systemd/system/round-carplay-cursor-seat.service
 if [[ -f "$RELEASE/deploy/pi-update.json" ]]; then
   sudo install -m 0644 "$RELEASE/deploy/pi-update.json" /etc/round-carplay/pi-update.json
 fi
@@ -250,6 +252,7 @@ sudo systemctl disable round-carplay-kiosk.service round-carplay-electron.servic
 sudo systemctl daemon-reload
 sudo systemctl enable round-carplay-playport.service round-carplay-backend.service round-carplay-browser-kiosk.service
 sudo systemctl enable round-carplay-update-recover.service round-carplay-network-recover.timer
+sudo systemctl enable --now round-carplay-cursor-seat.service
 sudo systemctl enable getty@tty2.service
 if ! sudo /usr/local/sbin/round-carplay-network sync; then
   echo 'Wi-Fi is not ready yet. Use the local Wi-Fi menu or sudo nmtui after installation.'

@@ -159,6 +159,17 @@ function saveSettings(value: unknown) {
 
 function serveHttp(request: IncomingMessage, response: ServerResponse): void {
   const url = new URL(request.url || '/', `http://${HOST}:${PORT}`)
+  if (url.pathname === '/api/developer/pointer-refresh' && isPiDeployment) {
+    if (request.method !== 'POST' || !isLocalOrigin(request.headers.origin)) {
+      response.writeHead(403).end(); return
+    }
+    try {
+      writeFileSync(process.env.ROUND_CARPLAY_CURSOR_REFRESH_PATH || '/run/round-carplay-cursor/refresh',
+        String(Date.now()), { flag: 'r+' })
+      response.writeHead(204).end()
+    } catch { response.writeHead(503).end() }
+    return
+  }
   if (url.pathname === '/api/phone' && isPiDeployment) {
     if (!isLocalOrigin(request.headers.origin) || !['GET', 'POST'].includes(request.method || '')) {
       response.writeHead(403).end(); return

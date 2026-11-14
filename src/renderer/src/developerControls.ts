@@ -17,6 +17,9 @@ export function applyDeveloperControls(value = readDeveloperControls()): void {
   }
   style.textContent = value.enabled && value.showMousePointer ? '' :
     'html,body,body *,body *::before,body *::after{cursor:none!important}'
+  if (typeof fetch === 'function') {
+    void fetch('/api/developer/pointer-refresh', { method: 'POST' }).catch(() => undefined)
+  }
 }
 
 export function saveDeveloperControls(value: DeveloperControls): void {
