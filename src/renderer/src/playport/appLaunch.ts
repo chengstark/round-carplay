@@ -20,6 +20,8 @@ export class AppLaunch {
   ) {}
 
   open(app: CarPlayApp): void {
+    // Returning from the map does not change the continuously decoded main UI.
+    if (this.current.state === 'displaying' && this.current.app === app) return
     this.clearTimer()
     const requestId = crypto.randomUUID()
     this.publish({ state: 'requesting', app, requestId })
@@ -39,7 +41,7 @@ export class AppLaunch {
       return
     }
     this.publish({ ...this.current, state: 'accepted' })
-    // Discard decoded/queued old frames before asking for a new reference frame.
+    // Only a frame submitted after this reply can reveal the requested UI.
     this.refreshVideo()
     this.wait('The CarPlay screen did not refresh. Try again.')
   }

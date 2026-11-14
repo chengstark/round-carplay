@@ -1,0 +1,39 @@
+--- a/server/src/main/kotlin/com/playport/server/AppLaunchCommand.kt
++++ b/server/src/main/kotlin/com/playport/server/AppLaunchCommand.kt
+@@ -1,13 +1,11 @@
+ package com.playport.server
+ 
+-import com.shilapi.xcertplay.airplay.AirPlayInfoPlist
+-
+-/** A car-initiated UI request explicitly targets the main CarPlay display. */
++/** Request the phone's main CarPlay UI for an app URL. showUI controls display presentation. */
+ internal fun appLaunchCommand(app: String): Map<String, Any?>? {
+     val url = when (app) {
+         "youtube-music" -> "youtubemusic://"
+         "phone" -> "mobilephone://"
+         else -> return null
+     }
+-    return mapOf("type" to "showUI", "params" to mapOf("uuid" to AirPlayInfoPlist.MAIN_UUID, "url" to url))
++    return mapOf("type" to "requestUI", "params" to mapOf("url" to url))
+ }
+--- a/server/src/test/kotlin/com/playport/server/AppLaunchCommandTest.kt
++++ b/server/src/test/kotlin/com/playport/server/AppLaunchCommandTest.kt
+@@ -1,15 +1,14 @@
+ package com.playport.server
+ 
+-import com.shilapi.xcertplay.airplay.AirPlayInfoPlist
+ import org.junit.Assert.*
+ import org.junit.Test
+ 
+ class AppLaunchCommandTest {
+-    @Test fun appRequestsTargetTheMainScreenWithCarInitiatedShowUi() {
++    @Test fun appRequestsUseRequestUiWithTheAppUrl() {
+         for ((app, url) in mapOf("youtube-music" to "youtubemusic://", "phone" to "mobilephone://")) {
+             val command = appLaunchCommand(app)!!
+-            assertEquals("showUI", command["type"])
+-            assertEquals(mapOf("uuid" to AirPlayInfoPlist.MAIN_UUID, "url" to url), command["params"])
++            assertEquals("requestUI", command["type"])
++            assertEquals(mapOf("url" to url), command["params"])
+         }
+     }
+     @Test fun arbitraryUrlsCannotBeRequested() {

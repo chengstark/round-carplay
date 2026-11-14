@@ -1,0 +1,144 @@
+--- a/protocol/src/main/java/com/shilapi/xcertplay/airplay/AirPlaySession.kt
++++ b/protocol/src/main/java/com/shilapi/xcertplay/airplay/AirPlaySession.kt
+@@ -151,7 +151,10 @@
+         val sequence: Int
+         val future: java.util.concurrent.CompletableFuture<AirPlayCommandReply>
+         synchronized(eventWriteLock) {
+-            if (closed.get() || eventSocket == null || eventCipher == null) return null
++            if (closed.get() || eventSocket == null || eventCipher == null) {
++                Log.w(TAG, "airplay command unavailable type=${command["type"]} closed=${closed.get()} socket=${eventSocket != null} cipher=${eventCipher != null}")
++                return null
++            }
+             sequence = eventCseq + 1
+             future = commandReplies.register(sequence)
+             if (!sendCommandLocked(command)) {
+@@ -161,7 +164,8 @@
+         }
+         return try {
+             future.get(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS)
+-        } catch (_: Exception) {
++        } catch (error: Exception) {
++            Log.w(TAG, "airplay command reply missing type=${command["type"]} cseq=$sequence reason=${error.javaClass.simpleName}")
+             null
+         } finally {
+             commandReplies.remove(sequence)
+@@ -172,6 +176,8 @@
+         val socket = eventSocket ?: return false
+         val cipher = eventCipher ?: return false
+         eventCseq++
++        commandReplies.sent(eventCseq)
++        if (command["type"] == "showUI") Log.i(TAG, "airplay command tx type=showUI cseq=$eventCseq")
+         val body = BplistCodec.encode(command)
+         val head = "POST /command RTSP/1.0\r\n" +
+             "Content-Type: $PLIST_CONTENT_TYPE\r\n" +
+--- a/protocol/src/main/java/com/shilapi/xcertplay/airplay/AirPlayCommandReplies.kt
++++ b/protocol/src/main/java/com/shilapi/xcertplay/airplay/AirPlayCommandReplies.kt
+@@ -1,7 +1,6 @@
+ package com.shilapi.xcertplay.airplay
+ 
+ import java.util.concurrent.CompletableFuture
+-import java.util.concurrent.ConcurrentHashMap
+ 
+ data class AirPlayCommandReply(val status: Int, val errorCode: Long? = null, val validBody: Boolean = true) {
+     // Accepted is a command acknowledgement, not foreground-app confirmation.
+@@ -9,13 +8,39 @@
+ }
+ 
+ internal class AirPlayCommandReplies {
+-    private val pending = ConcurrentHashMap<Int, CompletableFuture<AirPlayCommandReply>>()
+-    fun register(sequence: Int) = CompletableFuture<AirPlayCommandReply>().also { pending[sequence] = it }
+-    fun remove(sequence: Int) { pending.remove(sequence) }
++    // iOS may omit CSeq on event-channel responses. Track every sent command,
++    // including commands without a waiter, to preserve wire order.
++    private val pending = linkedMapOf<Int, CompletableFuture<AirPlayCommandReply>?>()
++    private var orderedRepliesReliable = true
+ 
+-    fun handle(message: RtspMessage.Request) {
+-        val sequence = message.headers["cseq"]?.toIntOrNull() ?: return
++    @Synchronized fun register(sequence: Int): CompletableFuture<AirPlayCommandReply> {
++        val future = pending[sequence] ?: CompletableFuture<AirPlayCommandReply>()
++        pending[sequence] = future
++        return future
++    }
++
++    @Synchronized fun sent(sequence: Int) {
++        if (!pending.containsKey(sequence)) pending[sequence] = null
++        if (pending.size > 1024) {
++            orderedRepliesReliable = false
++            pending.values.forEach { it?.completeExceptionally(java.io.IOException("Event replies lost synchronization")) }
++            pending.clear()
++        }
++    }
++
++    // Keep a timed-out command's place so its late reply cannot accept another request.
++    @Synchronized fun remove(sequence: Int) {
++        if (pending.containsKey(sequence)) pending[sequence] = null
++    }
++
++    @Synchronized fun handle(message: RtspMessage.Request) {
+         val status = message.path.toIntOrNull() ?: return
++        val sequence = if (message.headers.containsKey("cseq")) {
++            message.headers["cseq"]?.toIntOrNull() ?: return
++        } else {
++            if (!orderedRepliesReliable) return
++            pending.keys.firstOrNull() ?: return
++        }
+         val future = pending.remove(sequence) ?: return
+         var validBody = true
+         val body = if (message.body.isEmpty()) emptyMap<Any?, Any?>() else {
+@@ -29,8 +54,8 @@
+         future.complete(AirPlayCommandReply(status, error, validBody))
+     }
+ 
+-    fun close() {
+-        pending.values.forEach { it.completeExceptionally(java.io.IOException("CarPlay session ended")) }
++    @Synchronized fun close() {
++        pending.values.forEach { it?.completeExceptionally(java.io.IOException("CarPlay session ended")) }
+         pending.clear()
+     }
+ }
+--- a/protocol/src/test/java/com/shilapi/xcertplay/airplay/AirPlayCommandRepliesTest.kt
++++ b/protocol/src/test/java/com/shilapi/xcertplay/airplay/AirPlayCommandRepliesTest.kt
+@@ -42,4 +42,42 @@
+         replies.close()
+         assertTrue(pending.isCompletedExceptionally)
+     }
++    @Test fun unnumberedRepliesConsumeEverySentCommandInOrder() {
++        val replies = AirPlayCommandReplies()
++        replies.sent(1) // Keyframe, without a waiter.
++        val app = replies.register(2)
++        replies.sent(2)
++        val unnumbered = response(0).copy(headers = emptyMap())
++        replies.handle(unnumbered)
++        assertFalse(app.isDone)
++        replies.handle(unnumbered)
++        assertTrue(app.join().accepted)
++    }
++
++    @Test fun lateUnnumberedReplyCannotCompleteANewerAppRequest() {
++        val replies = AirPlayCommandReplies()
++        val old = replies.register(1)
++        replies.sent(1)
++        replies.remove(1)
++        val current = replies.register(2)
++        replies.sent(2)
++        val unnumbered = response(0).copy(headers = emptyMap())
++        replies.handle(unnumbered)
++        assertFalse(old.isDone)
++        assertFalse(current.isDone)
++        replies.handle(unnumbered.copy(path = "404"))
++        assertFalse(current.join().accepted)
++    }
++
++    @Test fun missingResponsesFailClosedWhenQueueLimitIsReached() {
++        val replies = AirPlayCommandReplies()
++        for (sequence in 1..1025) replies.sent(sequence)
++        val current = replies.register(1026)
++        replies.sent(1026)
++        replies.handle(response(0).copy(headers = emptyMap()))
++        assertFalse(current.isDone)
++        replies.handle(response(1026))
++        assertTrue(current.join().accepted)
++    }
++
+ }

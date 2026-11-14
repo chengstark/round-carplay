@@ -31,12 +31,16 @@ test('old frames cannot reveal a panel; a matching accepted reply requires refre
   assert.equal(c.states.at(-1).state, 'displaying')
 })
 
-test('rapid Music/Phone changes ignore old replies and reopening always requests the app', t => {
+test('rapid changes ignore old replies; reopening the prepared app is immediate until disconnect', t => {
   const c = setup(t)
   c.launcher.open('youtube-music'); c.launcher.open('phone')
   c.reply(0); c.launcher.frame()
   assert.equal(c.states.at(-1).state, 'requesting')
-  c.reply(1); c.launcher.frame(); c.launcher.cancel()
+  c.reply(1); c.launcher.frame()
+  c.launcher.open('phone')
+  assert.equal(c.sent.length, 2, 'returning from the map keeps the already displayed app ready')
+  assert.equal(c.states.at(-1).state, 'displaying')
+  c.launcher.cancel()
   c.launcher.open('phone')
   assert.equal(c.sent.length, 3)
   assert.notEqual(c.sent[1].requestId, c.sent[2].requestId)

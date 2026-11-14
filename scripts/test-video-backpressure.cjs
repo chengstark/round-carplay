@@ -47,10 +47,48 @@ test('slow decoding stays bounded and waits for a new H.264 reference frame afte
   assert.equal(decoder.frames.at(-1).type, 'key')
   const beforeRefresh = decoder.frames.length
   player.restartAtKeyframe()
-  assert.equal(decoder.resets, 2, 'app switching discards queued frames from the previous screen')
+  assert.equal(decoder.resets, 2, 'explicit stream recovery discards queued frames')
   player.push(frame(false))
   assert.equal(decoder.frames.length, beforeRefresh)
   player.push(frame(true))
   assert.equal(decoder.frames.length, beforeRefresh + 1)
+  player.close()
+})
+
+test('app switching keeps the decoder warm and only fresh submitted frames confirm readiness', t => {
+  const saved = { VideoDecoder: global.VideoDecoder, EncodedVideoChunk: global.EncodedVideoChunk, window: global.window }
+  t.after(() => Object.assign(global, saved))
+  global.window = { devicePixelRatio: 1 }
+  let decoder, ready = 0, requests = 0, closed = 0
+  global.VideoDecoder = class {
+    state = 'unconfigured'; decodeQueueSize = 0; frames = []; resets = 0
+    constructor(callbacks) { decoder = this; this.output = callbacks.output }
+    configure() { this.state = 'configured' }
+    reset() { this.resets++ }
+    decode(chunk) { this.frames.push(chunk) }
+    close() { this.state = 'closed' }
+  }
+  global.EncodedVideoChunk = class { constructor(value) { Object.assign(this, value) } }
+  const canvas = { clientWidth: 512, clientHeight: 512, getContext: () => ({ drawImage() {} }) }
+  const player = new PlayPortVideo(canvas, () => ready++, error => assert.equal(error, ''), () => requests++)
+  player.configure({ codec: 1, width: 512, height: 512, codecData: new Uint8Array(), streamType: 110 })
+  const packet = keyframe => ({ keyframe, data: Uint8Array.from([0, 0, 0, 1, keyframe ? 0x65 : 0x41]) })
+  player.push(packet(true))
+  player.push(packet(false))
+  const initialDecoder = decoder
+  player.configure({ codec: 1, width: 512, height: 512, codecData: new Uint8Array(), streamType: 110 })
+  assert.equal(decoder, initialDecoder, 'repeated identical codec headers preserve the decoder and queued frames')
+  player.waitForFreshFrame()
+  for (const chunk of decoder.frames) decoder.output({ timestamp: chunk.timestamp, displayWidth: 512, displayHeight: 512, close: () => closed++ })
+  assert.equal(ready, 0, 'frames queued before the acknowledgement cannot reveal the overlay')
+  player.push(packet(false))
+  decoder.output({ timestamp: decoder.frames.at(-1).timestamp, displayWidth: 512, displayHeight: 512, close: () => closed++ })
+  assert.equal(ready, 1, 'the next delta frame can reveal the overlay without waiting for an IDR')
+  assert.equal(decoder.resets, 0)
+  assert.equal(requests, 1)
+  assert.equal(closed, 3)
+  player.configure({ codec: 1, width: 1024, height: 1024, codecData: new Uint8Array(), streamType: 110 })
+  assert.notEqual(decoder, initialDecoder, 'an actual stream configuration change still rebuilds the decoder')
+  assert.equal(initialDecoder.state, 'closed')
   player.close()
 })

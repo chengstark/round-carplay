@@ -21,6 +21,13 @@ distribution; the Pi runs them directly. There is no prebuilt OS image yet.
   existing 4:3 CSS compensation. The installer does not change HDMI modes.
 - Use the existing external Wi-Fi for bring-up. A Pi-hosted hotspot and
   simultaneous wireless CarPlay have not been validated.
+- The Pi launcher uses `--no-audio`: no advertised audio formats, audio resource
+  ownership, or accepted audio stream ports. The Pi microphone is disabled.
+  It also installs a WirePlumber 0.5 user configuration fragment disabling
+  `monitor.bluez`, so the Pi does not advertise separate Bluetooth speaker or
+  hands-free audio profiles. The native iAP pairing profiles remain available.
+  Select the intended audio output on the iPhone; this does not configure a
+  separate car stereo or Bluetooth speaker.
 - Use the current Insignia USB Bluetooth adapter for the first test if the Pi's
   built-in Bluetooth does not work. BlueZ is enabled. Do not apply the old
   scripts that turn the controller off.
@@ -86,11 +93,14 @@ deleting keys. **Connect iPhone** reuses a completed bond. Only a live
 Bluetooth “Connected” label. The first clean pairing worked on the current Pi;
 test the same procedure on every new Pi before calling its installation ready.
 
-The tested bridge, phone worker and network timer fix must be committed before
-the GitHub build can reproduce them. A local private package built from this
-working tree can include uncommitted code, but the published update channel
-contains only committed source. Private accessory identity must be supplied
-securely for each initial install; it is never included in public updates.
+Both package paths include the native bridge overlay and the numbered PlayPort
+patches for app requests, unnumbered replies, display-only audio, and active
+session ownership. The dashboard keeps prepared apps and unchanged video
+decoders alive across map/overlay transitions and viewer reconnects. The GitHub
+ARM64 build compiles this source, runs its tests, and publishes the signed update.
+A local private package can include uncommitted code; public updates contain
+only committed source. Private accessory identity must be supplied securely for
+each initial install; it is never included in public updates.
 
 If installation preceded pairing and you need to change the address/settings:
 

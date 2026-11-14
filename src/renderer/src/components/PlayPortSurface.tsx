@@ -46,7 +46,7 @@ export default function PlayPortSurface({ view, native = false, onSpeed }: Props
       if (!sessionActive.current || socket.current?.readyState !== WebSocket.OPEN) return false
       socket.current.send(JSON.stringify({ type: 'launchApp', app, requestId } satisfies ClientMessage))
       return true
-    }, () => mainPlayer.current?.restartAtKeyframe(), setAppLaunch)
+    }, () => mainPlayer.current?.waitForFreshFrame(), setAppLaunch)
   }
   const reconnectTimer = useRef<number | null>(null)
   const [connection, setConnection] = useState<'connecting' | 'connected' | 'live' | 'offline'>('connecting')
@@ -196,6 +196,7 @@ export default function PlayPortSurface({ view, native = false, onSpeed }: Props
   }
 
   const nativeKey = (key: 'home' | 'back') => {
+    resetApp()
     const knob = { select: false, home: false, back: false, x: 0, y: 0, wheel: 0 }
     send({ type: 'knob', knob: { ...knob, [key]: true } })
     send({ type: 'knob', knob })
@@ -204,9 +205,8 @@ export default function PlayPortSurface({ view, native = false, onSpeed }: Props
   useEffect(() => {
     const app = appForView(view)
     if (app) launchApp(app)
-    else resetApp()
     return () => {
-      appLauncher.current?.cancel()
+      // Keep the prepared main screen alive while the map covers it.
       if (activePointer.current !== null && socket.current?.readyState === WebSocket.OPEN) {
         socket.current.send(JSON.stringify({ type: 'touch', contacts: [] } satisfies ClientMessage))
       }

@@ -24,7 +24,8 @@ class LaunchTests(unittest.TestCase):
         self.config.parent.mkdir()
         self.config.write_text(json.dumps({'ssid': 'network with spaces', 'password': 'private-test-secret',
                                           'phone': '00:11:22:33:44:55', 'token': 't' * 64}))
-        for name, value in [('ROOT', self.root), ('CONFIG', self.config)]:
+        for name, value in [('ROOT', self.root), ('CONFIG', self.config),
+                            ('BLUETOOTH_AUDIO_CONFIG', root / 'wireplumber/no-audio.conf')]:
             mock = patch.object(launch, name, value)
             mock.start()
             self.addCleanup(mock.stop)
@@ -33,13 +34,15 @@ class LaunchTests(unittest.TestCase):
         (self.root / 'current/playport').mkdir(parents=True)
         with patch('sys.argv', ['launch.py', 'host']), patch.object(launch, 'lan_address', return_value='192.168.2.9'), \
              patch.object(launch, 'wifi_channel', return_value='6'), patch.object(launch.os, 'chdir'), \
-             patch.object(launch.os, 'execvpe') as execute, patch.object(launch.subprocess, 'Popen'), patch.dict(os.environ, {}, clear=True):
+             patch.object(launch.os, 'execvpe') as execute, patch.object(launch.subprocess, 'Popen'), \
+             patch.object(launch, 'configure_display_only_audio'), patch.dict(os.environ, {}, clear=True):
             launch.main()
         command, argv, env = execute.call_args.args
         self.assertTrue(command.endswith('/playport/bin/server'))
         self.assertEqual(argv[argv.index('--diameter') + 1], '512')
         self.assertEqual(argv[argv.index('--main-render-scale') + 1], '200')
         self.assertEqual(argv[argv.index('--bind') + 1], '192.168.2.9')
+        self.assertIn('--no-audio', argv)
         self.assertEqual(env['PLAYPORT_WIFI_PASSPHRASE'], 'private-test-secret')
         self.assertEqual(env['PLAYPORT_OUTBOUND_HOLD_FILE'], str(self.root / 'state/phone-connect-hold'))
         self.assertNotIn('private-test-secret', argv)
@@ -47,6 +50,15 @@ class LaunchTests(unittest.TestCase):
         state = self.root / 'state/playport/config.json'
         self.assertEqual(state.stat().st_mode & 0o777, 0o600)
         self.assertEqual(json.loads(state.read_text())['wifiPassphrase'], 'private-test-secret')
+
+    def test_bluetooth_audio_policy_is_applied_once_without_restarting_bluez(self):
+        with patch.object(launch.subprocess, 'run') as run:
+            run.return_value.returncode = 0
+            launch.configure_display_only_audio()
+            launch.configure_display_only_audio()
+        self.assertIn('monitor.bluez = disabled', launch.BLUETOOTH_AUDIO_CONFIG.read_text())
+        run.assert_called_once()
+        self.assertEqual(run.call_args.args[0], ['systemctl', '--user', 'try-restart', 'wireplumber.service'])
 
     def test_backend_uses_local_authenticated_bridge_and_bundle_update_path(self):
         with patch('sys.argv', ['launch.py', 'backend']), patch.object(launch.os, 'execvpe') as execute:

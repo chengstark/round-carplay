@@ -15,6 +15,8 @@ export class PlayPortVideo {
   private decoderConfig: VideoDecoderConfig | null = null
   private waitingForKeyframe = true
   private lastKeyframeRequest = -Infinity
+  private freshAfterUs = -Infinity
+  private currentConfig: VideoConfigMessage | null = null
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -25,6 +27,11 @@ export class PlayPortVideo {
   ) {}
 
   configure(message: VideoConfigMessage): void {
+    const previous = this.currentConfig
+    if (this.decoder?.state === 'configured' && previous &&
+        previous.codec === message.codec && previous.width === message.width && previous.height === message.height &&
+        previous.codecData.length === message.codecData.length &&
+        previous.codecData.every((byte, index) => byte === message.codecData[index])) return
     this.close()
     if (typeof VideoDecoder === 'undefined') {
       this.onError('This Chromium build does not expose WebCodecs VideoDecoder.')
@@ -58,6 +65,7 @@ export class PlayPortVideo {
       this.usesDescription = descriptionPresent
       this.timestampUs = 0
       this.configured = true
+      this.currentConfig = { ...message, codecData: message.codecData.slice() }
       this.canvas.width = message.width
       this.canvas.height = message.height
       this.onError('')
@@ -108,8 +116,10 @@ export class PlayPortVideo {
   close(): void {
     this.configured = false
     this.decoderConfig = null
+    this.currentConfig = null
     this.waitingForKeyframe = true
     this.lastKeyframeRequest = -Infinity
+    this.freshAfterUs = -Infinity
     if (this.decoder) {
       try { this.decoder.close() } catch {}
     }
@@ -126,6 +136,12 @@ export class PlayPortVideo {
       this.onError(error instanceof Error ? error.message : String(error))
     }
     this.waitingForKeyframe = true
+    this.requestKeyframe()
+  }
+
+  /** Keep H.264 references warm; queued frames must not confirm a new UI request. */
+  waitForFreshFrame(): void {
+    this.freshAfterUs = this.timestampUs
     this.requestKeyframe()
   }
 
@@ -147,7 +163,7 @@ export class PlayPortVideo {
         context.imageSmoothingQuality = 'high'
         context.drawImage(frame, 0, 0, width, height)
       }
-      this.onFrame()
+      if (frame.timestamp > this.freshAfterUs) this.onFrame()
       this.onSourceFrame?.(frame)
     } finally {
       frame.close()

@@ -14,6 +14,26 @@ import time
 ROOT = Path.home() / '.local/share/round-carplay-pi'
 CONFIG = Path.home() / '.config/round-carplay-deploy/settings.json'
 NETWORK_FILE = Path('/etc/round-carplay/network.json')
+BLUETOOTH_AUDIO_CONFIG = Path.home() / '.config/wireplumber/wireplumber.conf.d/55-round-carplay-no-audio.conf'
+
+
+def configure_display_only_audio():
+    # WirePlumber's Bluetooth audio profiles are independent of native iAP.
+    content = 'wireplumber.profiles = {\n  main = {\n    monitor.bluez = disabled\n  }\n}\n'
+    if BLUETOOTH_AUDIO_CONFIG.exists() and BLUETOOTH_AUDIO_CONFIG.read_text() == content:
+        return
+    BLUETOOTH_AUDIO_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    BLUETOOTH_AUDIO_CONFIG.write_text(content)
+    runtime = os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}')
+    env = {**os.environ, 'XDG_RUNTIME_DIR': runtime,
+           'DBUS_SESSION_BUS_ADDRESS': os.environ.get('DBUS_SESSION_BUS_ADDRESS', f'unix:path={runtime}/bus')}
+    try:
+        result = subprocess.run(['systemctl', '--user', 'try-restart', 'wireplumber.service'],
+                                env=env, capture_output=True, timeout=15)
+        if result.returncode:
+            print('Bluetooth audio policy saved; it will load when the user audio service starts.', flush=True)
+    except (OSError, subprocess.TimeoutExpired):
+        print('Bluetooth audio policy saved; audio service restart was unavailable.', flush=True)
 
 
 def load():
@@ -76,6 +96,7 @@ def main():
     current = ROOT / 'current'
     env = os.environ.copy()
     if args.service == 'host':
+        configure_display_only_audio()
         if NETWORK_FILE.exists():
             data.update(json.loads(NETWORK_FILE.read_text()))
         os.chdir(current / 'playport')
@@ -92,7 +113,7 @@ def main():
         (state / 'config.json').chmod(0o600)
         command = [str(current / 'playport/bin/server'), '--wireless', '--round',
                    '--diameter', '512', '--ui-scale', '100', '--main-render-scale', '200',
-                   '--fps', '60', '--wifi-ssid', data['ssid'], '--bt-address', data['phone'],
+                   '--fps', '60', '--no-audio', '--wifi-ssid', data['ssid'], '--bt-address', data['phone'],
                    '--wifi-channel', wifi_channel(),
                    '--bt-bridge', str(current / 'playport/linux/bt-bridge/bt-bridge'),
                    '--bind', lan_address(), '--mdns', 'jmdns',

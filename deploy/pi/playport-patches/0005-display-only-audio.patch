@@ -1,0 +1,154 @@
+--- a/server/src/main/kotlin/com/playport/server/ServerConfig.kt
++++ b/server/src/main/kotlin/com/playport/server/ServerConfig.kt
+@@ -20,6 +20,7 @@
+     val hevc: Boolean = false,
+     val roundDisplay: Boolean = false,
+     val rightHandDrive: Boolean = false,
++    val disableAudioOutput: Boolean = false,
+     val bindAddress: String? = null,
+     val identityDir: Path,
+     val stateDir: Path,
+@@ -92,6 +93,7 @@
+                     "--hevc" -> config = config.copy(hevc = true)
+                     "--round" -> config = config.copy(roundDisplay = true)
+                     "--rhd" -> config = config.copy(rightHandDrive = true)
++                    "--no-audio" -> config = config.copy(disableAudioOutput = true)
+                     "--bind" -> config = config.copy(bindAddress = nextValue(flag))
+                     "--identity-dir" -> config = config.copy(identityDir = Path.of(nextValue(flag)))
+                     "--state-dir" -> config = config.copy(stateDir = Path.of(nextValue(flag)))
+@@ -165,6 +167,7 @@
+                   --hevc                    Offer H.265/HEVC video (sharper at the same bitrate; browser must support it)
+                   --round                   Enable circular display negotiation and the radial HMI dock
+                   --rhd                     Right-hand-drive layout
++                  --no-audio                Display only: do not receive audio or use a microphone
+                   --bind <address>          Bind address (default: auto-detect LAN address)
+                   --identity-dir <path>     Directory containing offline-mfi/ (default: ./identity)
+                   --state-dir <path>        AirPlay identity + pairing state (default: ~/.playport)
+--- a/server/src/main/kotlin/com/playport/server/CarPlayServer.kt
++++ b/server/src/main/kotlin/com/playport/server/CarPlayServer.kt
+@@ -53,7 +53,7 @@
+     val hub = WebHub(config, display)
+     val bridge = WebBridge(hub)
+     private val vehicleUi = VehicleUiState(hub::setVehicleState)
+-    val media = CarPlayMediaEngine(bridge, microphoneEnabled = true, audioCaptureDirectory = null)
++    val media = CarPlayMediaEngine(bridge, microphoneEnabled = !config.disableAudioOutput, audioCaptureDirectory = null)
+ 
+     private val pairings = loadPairings()
+     val mfi: MfiAuthenticator by lazy { MfiIdentity.load(config) }
+@@ -101,6 +101,7 @@
+             entertainmentSampleRate = 48_000,
+             hevc = display.hevc,
+             microphone = false,
++            disableAudioOutput = config.disableAudioOutput,
+             manufacturer = config.manufacturer,
+             model = config.model,
+             oemLabel = config.deviceName,
+--- a/server/src/test/kotlin/com/playport/server/ServerConfigTest.kt
++++ b/server/src/test/kotlin/com/playport/server/ServerConfigTest.kt
+@@ -11,6 +11,12 @@
+         identityDir = Path.of("identity"),
+         stateDir = Path.of("state"),
+     )
++
++    @Test
++    fun noAudioFlagEnablesDisplayOnlyMode() {
++        assertTrue(ServerConfig.fromArgs(arrayOf("--no-audio"), defaults).disableAudioOutput)
++        assertEquals(false, defaults.disableAudioOutput)
++    }
+ 
+     @Test
+     fun roundModeDefaultsToNative480Display() {
+--- a/protocol/src/main/java/com/shilapi/xcertplay/airplay/AirPlayInfoPlist.kt
++++ b/protocol/src/main/java/com/shilapi/xcertplay/airplay/AirPlayInfoPlist.kt
+@@ -42,7 +42,7 @@
+             "rightHandDrive" to config.rightHandDrive,
+             "keepAliveLowPower" to false,
+             "keepAliveSendStatsAsBody" to false,
+-            "modes" to modes(),
++            "modes" to modes(config.disableAudioOutput),
+         )
+         if (!config.disableAudioOutput) {
+             info["audioLatencies"] = audioLatencies()
+@@ -81,8 +81,8 @@
+         "unborrowConstraint" to CONSTRAINT_ANYTIME,
+     )
+ 
+-    private fun modes(): Map<String, Any?> = linkedMapOf(
+-        "resources" to listOf(resource(RESOURCE_SCREEN), resource(RESOURCE_AUDIO)),
++    private fun modes(noAudio: Boolean): Map<String, Any?> = linkedMapOf(
++        "resources" to if (noAudio) listOf(resource(RESOURCE_SCREEN)) else listOf(resource(RESOURCE_SCREEN), resource(RESOURCE_AUDIO)),
+         "appStates" to listOf(
+             linkedMapOf("appStateID" to 2, "state" to false),
+             linkedMapOf("appStateID" to 1, "speechMode" to -1),
+--- a/protocol/src/main/java/com/shilapi/xcertplay/airplay/AirPlaySession.kt
++++ b/protocol/src/main/java/com/shilapi/xcertplay/airplay/AirPlaySession.kt
+@@ -532,6 +532,10 @@
+                     }
+                 }
+                 STREAM_TYPE_MAIN_AUDIO, STREAM_TYPE_ALT_AUDIO, STREAM_TYPE_MAIN_HIGH_AUDIO -> {
++                    if (config.disableAudioOutput) {
++                        debugLog("airplay audio stream type=$type rejected: display-only mode")
++                        continue
++                    }
+                     val streamResponse = media.onAudio(this, type, stream)
+                     debugLog(
+                         "airplay audio stream type=$type accepted=${streamResponse != null} " +
+--- a/protocol/src/main/java/com/shilapi/xcertplay/network/CarPlayBonjourProtocol.kt
++++ b/protocol/src/main/java/com/shilapi/xcertplay/network/CarPlayBonjourProtocol.kt
+@@ -13,7 +13,7 @@
+         identity: AirPlayIdentity,
+     ): Map<String, String> = linkedMapOf(
+         "deviceid" to config.deviceId,
+-        "features" to "0x44540380,0x61",
++        "features" to if (config.disableAudioOutput) "0x40000180,0x61" else "0x44540380,0x61",
+         "flags" to "0x4",
+         "model" to config.model,
+         "srcvers" to config.sourceVersion,
+--- /dev/null
++++ b/protocol/src/test/java/com/shilapi/xcertplay/airplay/DisplayOnlySessionTest.kt
+@@ -0,0 +1,45 @@
++package com.shilapi.xcertplay.airplay
++
++import com.shilapi.xcertplay.network.CarPlayBonjourProtocol
++import java.net.Socket
++import org.junit.Assert.*
++import org.junit.Test
++
++class DisplayOnlySessionTest {
++    private fun config() = AirPlayConfig(
++        deviceName = "test", deviceId = "02:00:00:00:00:02", btMac = "02:00:00:00:00:02",
++        sourceVersion = "366.0", main = AirPlayDisplayConfig(widthPixels = 512, heightPixels = 512),
++        disableAudioOutput = true,
++    )
++
++    @Test fun displayOnlyAdvertisementDoesNotClaimAudioFormatsOrAudioOwnership() {
++        val config = config()
++        val info = AirPlayInfoPlist.build(config)
++        assertFalse(info.containsKey("audioFormats"))
++        assertFalse(info.containsKey("audioLatencies"))
++        val resources = (info["modes"] as Map<*, *>)["resources"] as List<*>
++        assertEquals(listOf(1), resources.map { (it as Map<*, *>)["resourceID"] })
++        assertEquals("0x40000180,0x61", CarPlayBonjourProtocol.airPlayTxtRecords(config, AirPlayIdentity.generate())["features"])
++    }
++
++    @Test fun audioSetupCannotOpenAudioPortsWhileVideoSetupStillWorks() {
++        var audioCalls = 0
++        val session = AirPlaySession(
++            socket = Socket(), config = config(), identity = AirPlayIdentity.generate(),
++            pairings = PairingStore(), mfi = null, listener = object : AirPlaySessionListener {},
++            media = object : AirPlayMediaHandler {
++                override fun onAudio(session: AirPlaySession, type: Int, stream: Map<String, Any?>): Map<String, Any?>? {
++                    audioCalls++
++                    return mapOf("type" to type, "dataPort" to 9999)
++                }
++                override fun onScreen(session: AirPlaySession, type: Int, stream: Map<String, Any?>): Int = 8888
++            },
++        )
++        try {
++            val method = AirPlaySession::class.java.getDeclaredMethod("handleStreams", List::class.java).apply { isAccessible = true }
++            val response = method.invoke(session, listOf(100, 101, 102, 110).map { mapOf("type" to it) }) as List<*>
++            assertEquals(0, audioCalls)
++            assertEquals(listOf(110), response.map { (it as Map<*, *>)["type"] })
++        } finally { session.close() }
++    }
++}
