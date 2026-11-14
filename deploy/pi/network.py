@@ -94,12 +94,14 @@ def snapshot(scan=True):
 
 
 def carplay_active():
+    # During boot the phone can be streaming before the status API is ready.
+    # Only an explicit idle response permits the recovery timer to restart it.
     try:
         with urllib.request.urlopen('https://127.0.0.1:8080/api/status', timeout=2,
                                     context=ssl._create_unverified_context()) as response:
-            return json.load(response).get('sessionActive') is True
+            return json.load(response).get('sessionActive') is not False
     except (OSError, ValueError, AttributeError):
-        return False
+        return True
 
 
 def sync_network(restart=True):

@@ -37,7 +37,7 @@ jobs:
         run: |
           ./node_modules/.bin/tsc --noEmit -p tsconfig.backend.json
           ./node_modules/.bin/tsc --noEmit -p tsconfig.web.json --composite false
-          node --test scripts/test-pi-deployment.cjs scripts/test-pi-updates.cjs scripts/test-navigation-overlay.cjs scripts/test-speed-ocr.cjs scripts/test-video-backpressure.cjs scripts/test-app-launch.cjs
+          node --test scripts/test-pi-deployment.cjs scripts/test-pi-updates.cjs scripts/test-navigation-overlay.cjs scripts/test-speed-ocr.cjs scripts/test-video-backpressure.cjs scripts/test-app-launch.cjs scripts/test-developer-controls.cjs
           python3 -m unittest discover -s deploy/pi -p 'test_*.py'
       - name: Build the current PlayPort source snapshot
         run: |

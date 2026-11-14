@@ -1,4 +1,5 @@
 import './api/browserApi'
+import { applyDeveloperControls } from './developerControls'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import PlayPortSurface from './components/PlayPortSurface'
@@ -11,6 +12,7 @@ import '@fontsource/roboto/500.css'
 import '@fontsource/roboto/700.css'
 
 const nativePreview = new URLSearchParams(location.search).get('view') === 'native'
+applyDeveloperControls()
 if (nativePreview) document.title = 'Native CarPlay'
 
 const Root = () => {

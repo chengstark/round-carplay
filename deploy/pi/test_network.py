@@ -12,6 +12,15 @@ spec.loader.exec_module(network)
 
 
 class NetworkRestartTests(unittest.TestCase):
+    def test_unavailable_or_incomplete_status_defers_restart(self):
+        with patch.object(network.urllib.request, 'urlopen', side_effect=OSError('starting')):
+            self.assertTrue(network.carplay_active())
+        with patch.object(network.urllib.request, 'urlopen') as request:
+            request.return_value.__enter__.return_value.read.return_value = b'{}'
+            self.assertTrue(network.carplay_active())
+            request.return_value.__enter__.return_value.read.return_value = b'{"sessionActive": false}'
+            self.assertFalse(network.carplay_active())
+
     def test_recovery_defers_restart_until_carplay_session_ends(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

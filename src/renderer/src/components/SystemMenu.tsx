@@ -3,14 +3,15 @@ import BrightnessControls from './BrightnessControls'
 import type { IpAddress, WifiNetwork } from '../../../main/network/NetworkService'
 import type { SystemUpdateStatus } from '../../../main/update/SystemUpdateService'
 import './SystemMenu.css'
+import { readDeveloperControls, saveDeveloperControls } from '../developerControls'
 
-type Page = 'home' | 'wifi' | 'gps' | 'system'
+type Page = 'home' | 'wifi' | 'gps' | 'system' | 'developer'
 type Props = {
   gpsSmoothing: number
   onGpsSmoothingChange(value: number): void
   onClose(): void
 }
-const titles: Record<Page, string> = { home: 'Settings', wifi: 'Wi-Fi', gps: 'Speed display', system: 'System' }
+const titles: Record<Page, string> = { home: 'Settings', wifi: 'Wi-Fi', gps: 'Speed display', system: 'System', developer: 'Developer' }
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error)
 
 export function SettingsIcon({ name }: { name: 'back' | 'wifi' | 'gps' | 'system' | 'next' }): React.JSX.Element {
@@ -26,6 +27,12 @@ export function SettingsIcon({ name }: { name: 'back' | 'wifi' | 'gps' | 'system
 
 export default function SystemMenu({ gpsSmoothing, onGpsSmoothingChange, onClose }: Props): React.JSX.Element {
   const [page, setPage] = useState<Page>('home')
+  const [developer, setDeveloper] = useState(readDeveloperControls)
+  const changeDeveloper = (value: typeof developer) => {
+    const next = { ...value, showMousePointer: value.enabled && value.showMousePointer }
+    setDeveloper(next)
+    saveDeveloperControls(next)
+  }
   const dialog = useRef<HTMLElement>(null)
   const [networks, setNetworks] = useState<WifiNetwork[]>([])
   const [addresses, setAddresses] = useState<IpAddress[]>([])
@@ -165,7 +172,8 @@ export default function SystemMenu({ gpsSmoothing, onGpsSmoothingChange, onClose
             {([
               { id: 'wifi', label: 'Wi-Fi', detail: 'Network connection', icon: 'wifi' },
               { id: 'gps', label: 'Speed display', detail: 'Response & smoothing', icon: 'gps' },
-              { id: 'system', label: 'System', detail: 'Updates & device info', icon: 'system' }
+              { id: 'system', label: 'System', detail: 'Updates & device info', icon: 'system' },
+              { id: 'developer', label: 'Developer', detail: 'Testing controls', icon: 'system' }
             ] as const).map(item => (
               <button type="button" className="settings-category" key={item.id} onClick={() => setPage(item.id)}>
                 <SettingsIcon name={item.icon} />
@@ -216,6 +224,18 @@ export default function SystemMenu({ gpsSmoothing, onGpsSmoothingChange, onClose
             <button type="button" aria-label="Increase GPS smoothing" disabled={smoothing >= 0.9} onClick={() => changeSmoothing(smoothing + 0.05)}>+</button>
           </div>
           <p className="settings-note">Less smoothing reacts faster. More smoothing steadies the readout.</p>
+        </>}
+
+        {page === 'developer' && <>
+          <button type="button" className="settings-action settings-secondary" role="switch" aria-checked={developer.enabled}
+            onClick={() => changeDeveloper({ ...developer, enabled: !developer.enabled })}>
+            Enable developer controls: {developer.enabled ? 'On' : 'Off'}
+          </button>
+          <button type="button" className="settings-action settings-secondary" role="switch" aria-checked={developer.showMousePointer}
+            disabled={!developer.enabled} onClick={() => changeDeveloper({ ...developer, showMousePointer: !developer.showMousePointer })}>
+            Show mouse pointer: {developer.showMousePointer ? 'On' : 'Off'}
+          </button>
+          <p className="settings-note">Use the pointer for testing with a mouse. Touch controls work with it hidden.</p>
         </>}
 
         {page === 'system' && <>

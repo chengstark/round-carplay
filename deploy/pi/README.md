@@ -10,10 +10,10 @@ distribution; the Pi runs them directly. There is no prebuilt OS image yet.
 - Target: Raspberry Pi OS **Trixie, 64-bit**, on the Pi 3 B; SSH and Wi-Fi enabled.
 - Initial installation needs internet for Debian runtime packages. Boot and
   operation afterwards use local services and the configured Wi-Fi network.
-- On the current Pi 3 B, a fresh iPhone pairing reached an active CarPlay video
-  session and survived two network recovery timer cycles. A second Pi and cold
-  boot/reconnect have not yet been validated. Touch, audio, camera and OCR still
-  need separate physical acceptance checks.
+- On the current Pi 3 B, fresh iPhone pairing and automatic reconnection after
+  reboot reached active CarPlay video. The startup guard also survived a network
+  recovery timer cycle during playback. A second Pi has not yet been validated.
+  Touch, camera and OCR still need separate physical acceptance checks.
 - Pi 3 B has 1 GB RAM. Initial JVM/Node heap limits are 256/128 MB; Chromium,
   native allocations and the OS use additional RAM. These are starting budgets.
 - Current negotiation stays **512×512 map, 1024×1024 main, H.264, 60 fps**.
@@ -28,6 +28,10 @@ distribution; the Pi runs them directly. There is no prebuilt OS image yet.
   hands-free audio profiles. The native iAP pairing profiles remain available.
   Select the intended audio output on the iPhone; this does not configure a
   separate car stereo or Bluetooth speaker.
+- Settings → Developer contains an enable switch and a persistent Show mouse
+  pointer switch. The pointer is hidden by default.
+- Network recovery restarts PlayPort only after its status API explicitly
+  confirms idle; a slow status API during boot cannot interrupt phone startup.
 - Use the current Insignia USB Bluetooth adapter for the first test if the Pi's
   built-in Bluetooth does not work. BlueZ is enabled. Do not apply the old
   scripts that turn the controller off.
