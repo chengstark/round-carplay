@@ -50,6 +50,33 @@ distribution; the Pi runs them directly. There is no prebuilt OS image yet.
   built-in Bluetooth does not work. BlueZ is enabled. Do not apply the old
   scripts that turn the controller off.
 
+## Pi 3 startup and onboard Wi-Fi
+
+On the Pi 3 B v1.2 tested on 2026-11-14, live CarPlay after a full boot improved
+from 112 seconds to 62–67 seconds; the local dashboard backend was ready at
+25 seconds. A host-only restart reconnected in 14–15 seconds. These are measured
+examples, not an instantaneous-start guarantee. Existing installations need an
+installer refresh to adopt the earlier systemd service ordering; OTA updates
+preserve root-owned units.
+
+This board also produced recurring `brcmfmac` SDIO timeouts with power saving
+disabled. The current diagnostic configuration lowers the onboard Wi-Fi bus
+from 50 MHz to 25 MHz using the documented firmware parameter in
+`/boot/firmware/config.txt`:
+
+```ini
+[pi3]
+dtparam=sdio_overclock=25
+[all]
+```
+
+Back up the boot configuration before applying this board-specific setting and
+reboot afterwards. Verify the **actual clock** with
+`sudo cat /sys/kernel/debug/mmc1/ios`; the requested clock can still show 50 MHz.
+This boot setting survives application updates but is not applied by the
+installer or OTA. It is a stability experiment, not a confirmed general fix for
+all SDIO failures. Removing this block restores the previous clock after reboot.
+
 ## Build on Mac
 
 From the active browser-kiosk checkout, with Java and the existing Gradle cache:
