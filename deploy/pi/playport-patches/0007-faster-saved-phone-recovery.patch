@@ -1,0 +1,46 @@
+--- a/server/src/main/kotlin/com/playport/server/CarPlayServer.kt
++++ b/server/src/main/kotlin/com/playport/server/CarPlayServer.kt
+@@ -67,0 +68 @@
++    @Volatile private var hasCompletedSession = false
+@@ -136,0 +138 @@
++            hasCompletedSession = true
+@@ -182 +183,0 @@
+-        startSupervisor()
+@@ -193,0 +195,3 @@
++        // Initial discovery may block while publishing mDNS. Do not let the
++        // recovery timer create a second bootstrap before startup installs it.
++        startSupervisor()
+@@ -363,0 +368 @@
++                                hasCompletedSession = hasCompletedSession,
+--- a/server/src/main/kotlin/com/playport/server/WirelessRecovery.kt
++++ b/server/src/main/kotlin/com/playport/server/WirelessRecovery.kt
+@@ -15,0 +16 @@
++    hasCompletedSession: Boolean = false,
+@@ -17,2 +18,6 @@
+-    if (elapsedMillis < 20_000L) return false
+-    return !bootstrapRunning || sessionEndedSinceBootstrap
++    if (elapsedMillis < 5_000L) return false
++    if (!bootstrapRunning || sessionEndedSinceBootstrap) return true
++    // After a previously live phone loses Wi-Fi, Bluetooth may stay open
++    // forever without producing a new session. Re-invite that known phone,
++    // while leaving a first enrollment's listener uninterrupted.
++    return hasCompletedSession && elapsedMillis >= 30_000L
+--- a/server/src/test/kotlin/com/playport/server/WirelessRecoveryTest.kt
++++ b/server/src/test/kotlin/com/playport/server/WirelessRecoveryTest.kt
+@@ -9,2 +9,2 @@
+-        assertFalse(shouldRetryWireless(true, 19_999, true))
+-        assertTrue(shouldRetryWireless(true, 20_000, true))
++        assertFalse(shouldRetryWireless(true, 4_999, true))
++        assertTrue(shouldRetryWireless(true, 5_000, true))
+@@ -21,2 +21,2 @@
+-        assertFalse(shouldRetryWireless(false, 19_999, false))
+-        assertTrue(shouldRetryWireless(false, 20_000, false))
++        assertFalse(shouldRetryWireless(false, 4_999, false))
++        assertTrue(shouldRetryWireless(false, 5_000, false))
+@@ -24,0 +25,6 @@
++
++    @Test fun retriesAStalledHandoffAfterThePreviouslyLivePhoneLosesWifi() {
++        assertFalse(shouldRetryWireless(true, 29_999, false, hasCompletedSession = true))
++        assertTrue(shouldRetryWireless(true, 30_000, false, hasCompletedSession = true))
++        assertFalse(shouldRetryWireless(true, 30_000, false, hasCompletedSession = false))
++    }

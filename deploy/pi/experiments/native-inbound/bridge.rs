@@ -185,7 +185,9 @@ async fn connect(
                     Ok(Err(error)) => log(&format!("outbound iAP2 unavailable: {error}; listeners remain available")),
                     Err(_) => log("outbound iAP2 timed out; listeners remain available"),
                 }
-                for _ in 0..20 {
+                // The connect attempt already waits up to 30 seconds. Do not
+                // add another 20-second idle gap before a saved-phone retry.
+                for _ in 0..2 {
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     if outbound_held() { break; }
                 }

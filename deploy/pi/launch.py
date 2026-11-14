@@ -103,7 +103,7 @@ def main():
         env['PLAYPORT_WIFI_PASSPHRASE'] = data['password']
         env['PLAYPORT_OUTBOUND_HOLD_FILE'] = str(ROOT / 'state/phone-connect-hold')
         # Limit heap on the 1GB Pi; these are initial budgets, not Pi benchmarks.
-        env.setdefault('JAVA_OPTS', '-Xms32m -Xmx256m -XX:ActiveProcessorCount=2 -XX:+UseSerialGC')
+        env.setdefault('JAVA_OPTS', '-Xms32m -Xmx256m -XX:ActiveProcessorCount=2 -XX:+UseSerialGC -XX:TieredStopAtLevel=1')
         # An old saved PlayPort config may omit its passphrase. A fresh ephemeral
         # config is written from our private settings on every start; identity,
         # pairing keys and TLS stay in the persistent state directory.

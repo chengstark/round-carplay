@@ -155,7 +155,7 @@ EOF
 sudo tee /etc/systemd/system/round-carplay-backend.service >/dev/null <<EOF
 [Unit]
 Description=Round CarPlay browser backend
-After=network.target round-carplay-playport.service
+After=network.target
 After=round-carplay-update-recover.service
 Wants=round-carplay-playport.service
 StartLimitIntervalSec=0

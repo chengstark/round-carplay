@@ -38,6 +38,12 @@ distribution; the Pi runs them directly. There is no prebuilt OS image yet.
   updates retain the installed helper and do not replace root-owned code.
 - Network recovery restarts PlayPort only after its status API explicitly
   confirms idle; a slow status API during boot cannot interrupt phone startup.
+- The dashboard backend starts independently of PlayPort's network startup.
+  The Pi JVM uses first-tier compilation to reduce cold-start work. A failed
+  saved-phone Bluetooth attempt pauses two seconds before retrying; an ended
+  session is re-invited after five seconds, and a stalled handoff from a
+  previously live phone is retried after thirty seconds. First enrollment is
+  kept open without that handoff deadline.
 - Use the current Insignia USB Bluetooth adapter for the first test if the Pi's
   built-in Bluetooth does not work. BlueZ is enabled. Do not apply the old
   scripts that turn the controller off.
