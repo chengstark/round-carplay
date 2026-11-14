@@ -117,6 +117,13 @@
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  transition: transform 180ms cubic-bezier(.22, 1, .36, 1), opacity 130ms ease;
+}
+
+.dock-toggle:active {
+  transform: translateX(-50%) scale(.94);
+  opacity: .8;
+  transition-duration: 70ms;
 }
 
 .dock-toggle::before {
@@ -186,7 +193,7 @@
   cursor: pointer;
   transform: translate(-50%, -50%);
   transition: color 160ms ease, background 160ms ease, border-color 160ms ease,
-    transform 160ms ease;
+    transform 180ms cubic-bezier(.22, 1, .36, 1), opacity 130ms ease;
 }
 
 .dock-button:nth-child(1) {
@@ -236,7 +243,15 @@
 }
 
 .dock-button:active {
-  transform: translate(-50%, -50%) scale(0.96);
+  transform: translate(-50%, -50%) scale(.92);
+  opacity: .84;
+  transition-duration: 70ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dock-button, .dock-toggle { transition: none; }
+  .dock-button:active { transform: translate(-50%, -50%); }
+  .dock-toggle:active { transform: translateX(-50%); }
 }
 
 @media (max-width: 520px), (max-height: 520px) {

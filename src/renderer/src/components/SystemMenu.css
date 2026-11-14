@@ -19,10 +19,22 @@
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  transition: transform 180ms cubic-bezier(.22, 1, .36, 1),
+    background-color 130ms ease, border-color 130ms ease, opacity 130ms ease;
 }
 .round-settings button:disabled { cursor: default; opacity: .4; }
 .round-settings button:focus-visible, .round-settings input:focus-visible { outline: .5cqw solid #d9f58f; outline-offset: .5cqw; }
-.round-settings button:active:not(:disabled) { background: #35432c; }
+.round-settings button:active:not(:disabled) {
+  background: #35432c;
+  transform: scale(.97);
+  opacity: .84;
+  transition-duration: 70ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .round-settings button { transition: none; }
+  .round-settings button:active:not(:disabled) { transform: none; }
+}
 .round-settings svg { width: 5cqw; height: 5cqw; flex: none; }
 .settings-header {
   position: absolute;

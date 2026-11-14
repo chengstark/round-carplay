@@ -97,6 +97,19 @@
   font: inherit;
 }
 
+.playport-app-status button, .native-controls button {
+  transition: transform 180ms cubic-bezier(.22, 1, .36, 1), opacity 130ms ease;
+}
+.playport-app-status button:active:not(:disabled), .native-controls button:active:not(:disabled) {
+  transform: scale(.95);
+  opacity: .84;
+  transition-duration: 70ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .playport-app-status button, .native-controls button { transition: none; }
+  .playport-app-status button:active:not(:disabled), .native-controls button:active:not(:disabled) { transform: none; }
+}
+
 .playport-guidance {
   position: absolute;
   z-index: 3;
