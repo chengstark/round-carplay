@@ -1,5 +1,20 @@
 export type DeveloperControls = { enabled: boolean; showMousePointer: boolean }
 const key = 'round-carplay-developer-controls'
+let refreshTimers: ReturnType<typeof setTimeout>[] = []
+let focusListenersInstalled = false
+
+function refreshCursorFocus(): void {
+  for (const timer of refreshTimers) clearTimeout(timer)
+  const refresh = () => {
+    if (typeof fetch === 'function') {
+      void fetch('/api/developer/pointer-refresh', { method: 'POST' }).catch(() => undefined)
+    }
+  }
+  refresh()
+  // Cage can acquire pointer focus before Chromium has applied the page's
+  // cursor rule. Retry after page startup, without continuous mouse motion.
+  refreshTimers = [250, 1000, 3000, 10000].map(delay => setTimeout(refresh, delay))
+}
 
 export function readDeveloperControls(): DeveloperControls {
   try {
@@ -17,9 +32,16 @@ export function applyDeveloperControls(value = readDeveloperControls()): void {
   }
   style.textContent = value.enabled && value.showMousePointer ? '' :
     'html,body,body *,body *::before,body *::after{cursor:none!important}'
-  if (typeof fetch === 'function') {
-    void fetch('/api/developer/pointer-refresh', { method: 'POST' }).catch(() => undefined)
+  if (!focusListenersInstalled && typeof window !== 'undefined') {
+    focusListenersInstalled = true
+    window.addEventListener('load', refreshCursorFocus)
+    window.addEventListener('pageshow', refreshCursorFocus)
+    window.addEventListener('focus', refreshCursorFocus)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') refreshCursorFocus()
+    })
   }
+  refreshCursorFocus()
 }
 
 export function saveDeveloperControls(value: DeveloperControls): void {

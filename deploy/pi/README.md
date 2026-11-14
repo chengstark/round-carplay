@@ -32,6 +32,8 @@ distribution; the Pi runs them directly. There is no prebuilt OS image yet.
   pointer switch. The pointer is hidden by default.
   The installer enables a root-owned cursor-seat helper for touch-only Cage:
   a virtual mouse keeps cursor focus available without generating clicks.
+  The UI refreshes pointer focus during startup and when the kiosk regains
+  focus, with bounded delayed retries while Chromium applies its cursor rule.
   Existing installations predating that service need the installer once; OTA
   updates retain the installed helper and do not replace root-owned code.
 - Network recovery restarts PlayPort only after its status API explicitly
