@@ -1,0 +1,43 @@
+diff --git a/server/src/main/kotlin/com/playport/server/WirelessRecovery.kt b/server/src/main/kotlin/com/playport/server/WirelessRecovery.kt
+--- a/server/src/main/kotlin/com/playport/server/WirelessRecovery.kt
++++ b/server/src/main/kotlin/com/playport/server/WirelessRecovery.kt
+@@ -1,12 +1,19 @@
+ package com.playport.server
+ 
+-/** A lingering RFCOMM bootstrap must not suppress recovery after Wi-Fi drops. */
++/**
++ * Keep a live RFCOMM bootstrap registered while the phone is pairing.
++ *
++ * Restarting a running bootstrap temporarily unregisters the BlueZ agent and
++ * SDP profile. A phone that starts pairing in that gap receives HCI
++ * "Pairing Not Allowed" and reports an unexplained pairing failure. A
++ * completed session may still request a fresh bootstrap, and an exited
++ * bootstrap is retried after the cooldown.
++ */
+ internal fun shouldRetryWireless(
+     bootstrapRunning: Boolean,
+     elapsedMillis: Long,
+     sessionEndedSinceBootstrap: Boolean,
+ ): Boolean {
+     if (elapsedMillis < 20_000L) return false
+-    // Allow a fresh handshake time to complete, but bound a stuck initial setup.
+-    return !bootstrapRunning || sessionEndedSinceBootstrap || elapsedMillis >= 90_000L
++    return !bootstrapRunning || sessionEndedSinceBootstrap
+ }
+diff --git a/server/src/test/kotlin/com/playport/server/WirelessRecoveryTest.kt b/server/src/test/kotlin/com/playport/server/WirelessRecoveryTest.kt
+--- a/server/src/test/kotlin/com/playport/server/WirelessRecoveryTest.kt
++++ b/server/src/test/kotlin/com/playport/server/WirelessRecoveryTest.kt
+@@ -10,10 +10,11 @@ class WirelessRecoveryTest {
+         assertTrue(shouldRetryWireless(true, 20_000, true))
+     }
+ 
+-    @Test fun givesAFreshHandshakeTimeButBoundsAStalledBootstrap() {
++    @Test fun neverInterruptsARunningInitialPairingBootstrap() {
+         assertFalse(shouldRetryWireless(true, 20_000, false))
+         assertFalse(shouldRetryWireless(true, 89_999, false))
+-        assertTrue(shouldRetryWireless(true, 90_000, false))
++        assertFalse(shouldRetryWireless(true, 90_000, false))
++        assertFalse(shouldRetryWireless(true, 900_000, false))
+     }
+ 
+     @Test fun retriesAnExitedBootstrapAfterTheCooldown() {

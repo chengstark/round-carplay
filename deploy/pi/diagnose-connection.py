@@ -6,8 +6,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
+import ssl
 import subprocess
 import sys
+import urllib.request
 
 
 CONFIG = Path.home() / ".config/round-carplay-deploy/settings.json"
@@ -26,6 +28,19 @@ def command(args: list[str], timeout: int = 10) -> str:
 
 def flag(text: str, label: str) -> bool:
     return bool(re.search(rf"^\s*{re.escape(label)}:\s*yes\s*$", text, re.MULTILINE))
+
+
+def session_is_active() -> bool:
+    # This is the local host's self-signed HTTPS endpoint. A past journal entry
+    # must never be treated as proof that the phone is still connected.
+    try:
+        with urllib.request.urlopen(
+            'https://127.0.0.1:8080/api/status', timeout=3,
+            context=ssl._create_unverified_context(),
+        ) as response:
+            return json.load(response).get('sessionActive') is True
+    except (OSError, ValueError, AttributeError):
+        return False
 
 
 def main() -> int:
@@ -57,16 +72,19 @@ def main() -> int:
             "round-carplay-browser-kiosk.service",
         )
     }
+    rfcomm_open = bool(re.search(r'bt-bridge: RFCOMM channel open\s*$', journal, re.MULTILINE))
+    active = session_is_active()
 
     checks = [
         ("core services", services["round-carplay-playport.service"] == "active" and services["round-carplay-backend.service"] == "active", f"playport={services['round-carplay-playport.service'] or 'unknown'} backend={services['round-carplay-backend.service'] or 'unknown'}"),
         ("bluetooth", "Powered: yes" in controller, "controller powered" if "Powered: yes" in controller else "controller unavailable or off"),
+        ("native bridge", (Path.home() / '.local/share/round-carplay-pi/current/playport/linux/bt-bridge/bt-bridge').is_file(), "PlayPort native Bluetooth bridge installed"),
         ("head-unit advertisement", IAP_ACCESSORY in controller and CARPLAY_DISCOVERY in controller, "iAP + CarPlay UUIDs advertised" if IAP_ACCESSORY in controller and CARPLAY_DISCOVERY in controller else "required local UUIDs missing"),
         ("phone bond", flag(phone_info, "Paired") and flag(phone_info, "Bonded") and flag(phone_info, "Trusted"), f"paired={flag(phone_info, 'Paired')} bonded={flag(phone_info, 'Bonded')} trusted={flag(phone_info, 'Trusted')}"),
         ("Wi-Fi", bool(active_ssid and address), f"ssid={active_ssid or 'none'} address={address or 'none'} configured={configured_ssid}"),
-        ("iAP transport", "RFCOMM channel open" in journal, "RFCOMM opened" if "RFCOMM channel open" in journal else "waiting for the iPhone's CarPlay connection"),
-        ("Wi-Fi handoff", "wireless bootstrap accepted by the iPhone" in journal, "iPhone accepted bootstrap" if "wireless bootstrap accepted by the iPhone" in journal else "not completed"),
-        ("CarPlay", "CarPlay session active" in journal, "session active" if "CarPlay session active" in journal else "no active session in the last 15 minutes"),
+        ("iAP transport", active or rfcomm_open, "RFCOMM opened" if active or rfcomm_open else "waiting for iPhone iAP connection"),
+        ("Wi-Fi handoff", active or "wireless bootstrap accepted by the iPhone" in journal, "iPhone accepted bootstrap" if active or "wireless bootstrap accepted by the iPhone" in journal else "not completed"),
+        ("CarPlay", active, "session active now" if active else "no active session reported by host"),
         ("display service", services["round-carplay-browser-kiosk.service"] == "active", f"kiosk={services['round-carplay-browser-kiosk.service'] or 'unknown'}"),
     ]
     first_failure = next((name for name, ok, _detail in checks if not ok), None)

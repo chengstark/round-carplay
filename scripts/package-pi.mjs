@@ -36,7 +36,7 @@ run(join(repository, 'node_modules/.bin/vite'), ['build', '--config', 'vite.rend
 copy(join(repository, 'out/renderer'), join(bundle, 'dashboard/ui'))
 
 // Gradle writes only to this disposable copy; the current PlayPort checkout is
-// read-only input. JAR bytecode is portable; compile the tiny BlueZ C bridge on Pi.
+// read-only input. JAR bytecode is portable; compile the upstream Rust bridge on Pi.
 for (const name of ['gradlew', 'gradle', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties']) {
   if (existsSync(join(host, name))) copy(join(host, name), join(stagedHost, name))
 }
@@ -45,10 +45,19 @@ for (const name of ['server', 'protocol']) {
   copy(join(host, name, 'src'), join(stagedHost, name, 'src'))
   copy(join(host, name, 'build.gradle.kts'), join(stagedHost, name, 'build.gradle.kts'))
 }
+for (const patch of readdirSync(join(repository, 'deploy/pi/playport-patches')).sort()) {
+  run('patch', ['--forward', '--strip=1', '--input', join(repository, 'deploy/pi/playport-patches', patch)], stagedHost)
+}
 run('bash', ['./gradlew', '--offline', '--no-daemon', ':server:installDist'], stagedHost)
 copy(join(stagedHost, 'server/build/install/server'), join(bundle, 'playport'))
 copy(join(host, 'web/dist'), join(bundle, 'playport/web/dist'))
-for (const name of ['main.c', 'build.sh']) copy(join(host, 'linux/bt-bridge', name), join(bundle, 'playport/linux/bt-bridge', name))
+copy(join(repository, 'vendor/playport-linux-pr4/bt-bridge'), join(bundle, 'playport/linux/bt-bridge'))
+// The Pi enrollment fix lives in these four adapted Rust modules. Keep them
+// over the upstream PR snapshot so a local package builds the tested bridge.
+for (const name of ['bridge', 'pairing', 'main', 'cli']) {
+  copy(join(repository, 'deploy/pi/experiments/native-inbound', `${name}.rs`),
+       join(bundle, 'playport/linux/bt-bridge/src', `${name}.rs`))
+}
 copy(join(repository, 'deploy/pi'), join(bundle, 'deploy'))
 for (const name of ['round-carplay-scan-wifi', 'round-carplay-connect-wifi']) copy(join(repository, 'scripts', name), join(bundle, 'deploy', name))
 if (includeIdentity) {

@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
 import { extname, join, normalize, resolve, sep } from 'node:path'
@@ -159,6 +159,22 @@ function saveSettings(value: unknown) {
 
 function serveHttp(request: IncomingMessage, response: ServerResponse): void {
   const url = new URL(request.url || '/', `http://${HOST}:${PORT}`)
+  if (url.pathname === '/api/phone' && isPiDeployment) {
+    if (!isLocalOrigin(request.headers.origin) || !['GET', 'POST'].includes(request.method || '')) {
+      response.writeHead(403).end(); return
+    }
+    const state = join(homedir(), '.local/share/round-carplay-pi/state')
+    try {
+      const value = readFileSync(join(state, 'phone.json'), 'utf8')
+      if (request.method === 'POST' && !['pairing', 'connecting'].includes(JSON.parse(value).state)) {
+        writeFileSync(join(state, 'phone-pair-request'), '', { mode: 0o600 })
+      }
+      response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(value)
+    } catch {
+      response.writeHead(503, { 'Content-Type': 'application/json' }).end(JSON.stringify({ state: 'waiting', message: 'Phone pairing service is starting.' }))
+    }
+    return
+  }
   if (url.pathname === '/api/speed-ocr') {
     if (request.method !== 'POST' || !isLocalOrigin(request.headers.origin) || request.headers['content-type'] !== 'image/png') {
       response.writeHead(403).end()

@@ -34,7 +34,7 @@ def configure():
     temporary.write_text(json.dumps(data, indent=2) + '\n')
     temporary.chmod(0o600)
     temporary.replace(CONFIG)
-    print('Saved private configuration. Pair/trust the phone with bluetoothctl, then reboot.')
+    print('Saved private configuration. Start phone pairing from dashboard Settings.')
 
 
 def lan_address():
@@ -80,6 +80,7 @@ def main():
             data.update(json.loads(NETWORK_FILE.read_text()))
         os.chdir(current / 'playport')
         env['PLAYPORT_WIFI_PASSPHRASE'] = data['password']
+        env['PLAYPORT_OUTBOUND_HOLD_FILE'] = str(ROOT / 'state/phone-connect-hold')
         # Limit heap on the 1GB Pi; these are initial budgets, not Pi benchmarks.
         env.setdefault('JAVA_OPTS', '-Xms32m -Xmx256m -XX:ActiveProcessorCount=2 -XX:+UseSerialGC')
         # An old saved PlayPort config may omit its passphrase. A fresh ephemeral
@@ -93,10 +94,13 @@ def main():
                    '--diameter', '512', '--ui-scale', '100', '--main-render-scale', '200',
                    '--fps', '60', '--wifi-ssid', data['ssid'], '--bt-address', data['phone'],
                    '--wifi-channel', wifi_channel(),
-                   '--bt-bridge', str(current / 'deploy/round-carplay-bt-bridge.py'),
+                   '--bt-bridge', str(current / 'playport/linux/bt-bridge/bt-bridge'),
                    '--bind', lan_address(), '--mdns', 'jmdns',
                    '--identity-dir', str(ROOT / 'private/identity'),
                    '--state-dir', str(state), '--token', data['token']]
+        # Share the PlayPort systemd cgroup so updates/restarts also terminate
+        # the pairing worker. Its lock prevents duplicate pairing attempts.
+        subprocess.Popen([sys.executable, str(current / 'deploy/phone.py')], env=env)
     elif args.service == 'backend':
         env.update({'NODE_ENV': 'production', 'NODE_OPTIONS': '--max-old-space-size=128',
                     'ROUND_CARPLAY_DEPLOYMENT': 'playport-pi', 'ROUND_CARPLAY_PORT': '4000',

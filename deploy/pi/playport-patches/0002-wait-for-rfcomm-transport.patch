@@ -1,0 +1,142 @@
+--- a/server/src/main/kotlin/com/playport/server/ProcessByteStream.kt
++++ b/server/src/main/kotlin/com/playport/server/ProcessByteStream.kt
+@@ -2,9 +2,11 @@
+ 
+ import com.shilapi.xcertplay.transport.BlockingDuplexByteStream
+ import java.io.Closeable
++import java.io.IOException
+ import java.io.InputStream
+ import java.io.OutputStream
+ import java.util.concurrent.LinkedBlockingQueue
++import java.util.concurrent.CountDownLatch
+ import java.util.concurrent.TimeUnit
+ import java.util.concurrent.atomic.AtomicBoolean
+ 
+@@ -23,6 +25,8 @@
+     private val output: OutputStream = process.outputStream
+     private val writeLock = Any()
+     private val closed = AtomicBoolean(false)
++    private val transportReady = CountDownLatch(1)
++    @Volatile private var transportOpened = false
+     @Volatile private var ended = false
+ 
+     init {
+@@ -48,6 +52,7 @@
+             // Falls through to the end marker.
+         } finally {
+             ended = true
++            transportReady.countDown()
+             inbound.offer(ByteArray(0))
+         }
+     }
+@@ -56,12 +61,25 @@
+         val logger = org.slf4j.LoggerFactory.getLogger("bt-bridge")
+         try {
+             process.errorStream.bufferedReader().forEachLine { line ->
++                if (line.trim() == "bt-bridge: RFCOMM channel open") {
++                    transportOpened = true
++                    transportReady.countDown()
++                }
+                 if (line.isNotBlank()) logger.info("$label: $line")
+             }
+         } catch (_: Exception) {
++        } finally {
++            transportReady.countDown()
+         }
+     }
+ 
++    fun awaitTransportOpen() {
++        transportReady.await()
++        if (!transportOpened || ended || closed.get()) {
++            throw IOException("Bluetooth RFCOMM transport closed before opening")
++        }
++    }
++
+     override fun send(data: ByteArray) {
+         synchronized(writeLock) {
+             output.write(data)
+@@ -88,6 +106,7 @@
+     override fun close() {
+         if (!closed.compareAndSet(false, true)) return
+         ended = true
++        transportReady.countDown()
+         runCatching { output.close() }
+         runCatching { input.close() }
+         process.destroy()
+--- a/server/src/main/kotlin/com/playport/server/WirelessBootstrap.kt
++++ b/server/src/main/kotlin/com/playport/server/WirelessBootstrap.kt
+@@ -68,6 +68,8 @@
+             log.info("wireless bootstrap: iPhone={} hostBt={} wifi={} ch={}", deviceAddress, hostBluetoothMac, wifi.ssid, wifi.channel)
+ 
+             val stream = BluetoothBridge.open(bridgePath, deviceAddress).also { bridgeProcess = it }
++            log.info("waiting for native Bluetooth RFCOMM transport")
++            stream.awaitTransportOpen()
+             val channel = Iap2Session.openWireless(stream, traceContext = "wireless-rfcomm", onTrace = { log.debug(it) })
+             log.info("wireless iAP2 CSM channel opened over RFCOMM")
+ 
+--- a/server/src/test/kotlin/com/playport/server/ProcessByteStreamTest.kt
++++ b/server/src/test/kotlin/com/playport/server/ProcessByteStreamTest.kt
+@@ -1,9 +1,63 @@
+ package com.playport.server
+ 
+ import org.junit.Assert.assertFalse
++import org.junit.Assert.assertTrue
++import org.junit.Assert.fail
+ import org.junit.Test
++import java.io.IOException
++import java.util.concurrent.Executors
++import java.util.concurrent.TimeUnit
++import java.util.concurrent.TimeoutException
++import java.util.concurrent.ExecutionException
+ 
+ class ProcessByteStreamTest {
++    @Test(timeout = 5_000) fun waitsForActualTransportRatherThanOpeningMessage() {
++        val process = ProcessBuilder("sh", "-c", "echo 'bt-bridge: RFCOMM channel opening' >&2; read first; echo 'bt-bridge: RFCOMM channel open' >&2; read last").start()
++        val stream = ProcessByteStream(process, "readiness-test")
++        val executor = Executors.newSingleThreadExecutor()
++        try {
++            val opened = executor.submit { stream.awaitTransportOpen() }
++            try {
++                opened.get(100, TimeUnit.MILLISECONDS)
++                fail("an opening message is not an open RFCOMM transport")
++            } catch (_: TimeoutException) {}
++            stream.send(byteArrayOf(10))
++            opened.get(2, TimeUnit.SECONDS)
++        } finally {
++            stream.close()
++            executor.shutdownNow()
++        }
++    }
++
++    @Test(timeout = 5_000) fun failedHelperDoesNotReportTransportReady() {
++        val stream = ProcessByteStream(ProcessBuilder("sh", "-c", "echo 'bt-bridge: RFCOMM open failed' >&2; exit 1").start(), "failed-readiness-test")
++        try {
++            stream.awaitTransportOpen()
++            fail("a failed helper must stop the bootstrap")
++        } catch (_: IOException) {
++        } finally {
++            stream.close()
++        }
++    }
++
++    @Test(timeout = 5_000) fun closingBridgeReleasesWaitingBootstrap() {
++        val stream = ProcessByteStream(ProcessBuilder("sh", "-c", "read ignored").start(), "cancel-readiness-test")
++        val executor = Executors.newSingleThreadExecutor()
++        try {
++            val opened = executor.submit { stream.awaitTransportOpen() }
++            stream.close()
++            try {
++                opened.get(2, TimeUnit.SECONDS)
++                fail("a closed helper must not report transport ready")
++            } catch (error: ExecutionException) {
++                assertTrue(error.cause is IOException)
++            }
++        } finally {
++            stream.close()
++            executor.shutdownNow()
++        }
++    }
++
+     @Test fun closeReapsABridgeThatIgnoresGracefulTermination() {
+         val process = ProcessBuilder(
+             "sh",

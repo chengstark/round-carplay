@@ -26,13 +26,13 @@ if [[ ! -f "$PACKAGE/private/identity/offline-mfi/identity.pk8" && ! -f "$ROOT/p
 fi
 sudo -v
 if [[ "${1:-}" == --offline ]]; then
-  for command in cage chromium node java cc nmcli python3 tesseract curl rfkill iw; do
+  for command in cage chromium node java nmcli python3 tesseract curl rfkill iw; do
     command -v "$command" >/dev/null || { echo "Missing runtime: $command; install online first." >&2; exit 1; }
   done
 else
   sudo apt-get update
   sudo apt-get install --yes --no-install-recommends \
-    cage chromium nodejs openjdk-21-jre-headless bluez libbluetooth-dev build-essential \
+    cage chromium nodejs openjdk-21-jre-headless bluez libbluetooth-dev build-essential cargo pkg-config libdbus-1-dev \
     python3 python3-dbus python3-gi tesseract-ocr tesseract-ocr-eng network-manager dbus-user-session \
     libpam-systemd curl rfkill iw
 fi
@@ -64,8 +64,16 @@ VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["buil
 RELEASE="$ROOT/releases/$VERSION"
 mkdir -p "$RELEASE"
 cp -R "$PACKAGE/dashboard" "$PACKAGE/playport" "$PACKAGE/deploy" "$PACKAGE/manifest.json" "$RELEASE/"
+if [[ ! -x "$HOME/.cargo/bin/cargo" ]]; then
+  if [[ "${1:-}" == --offline ]]; then
+    echo 'Install Rust stable with rustup before an offline source installation.' >&2; exit 1
+  fi
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o "$ROOT/state/rustup-init.sh"
+  RUSTUP_INIT_SKIP_PATH_CHECK=yes sh "$ROOT/state/rustup-init.sh" -y --profile minimal --default-toolchain stable
+fi
+export PATH="$HOME/.cargo/bin:$PATH"
 bash "$RELEASE/playport/linux/bt-bridge/build.sh"
-chmod 0755 "$RELEASE/deploy/round-carplay-bt-bridge.py" "$RELEASE/deploy/diagnose-connection.py"
+chmod 0755 "$RELEASE/deploy/diagnose-connection.py"
 chmod 0755 "$RELEASE/playport/bin/server"
 if [[ ! -f "$CONFIG" ]]; then python3 "$RELEASE/deploy/launch.py" configure; fi
 # Build and configure successfully before replacing the current release.
@@ -247,5 +255,5 @@ if ! sudo /usr/local/sbin/round-carplay-network sync; then
   echo 'Wi-Fi is not ready yet. Use the local Wi-Fi menu or sudo nmtui after installation.'
 fi
 sudo systemctl set-default graphical.target
-echo 'Installed current PlayPort + browser kiosk. Pair/trust the iPhone with bluetoothctl, then reboot.'
+echo 'Installed current PlayPort + browser kiosk. Use Settings → CarPlay phone → Pair iPhone, then select PlayPort on the iPhone.'
 echo 'No reboot, display-mode change, phone re-pairing or brightness actuation was performed by this installer.'

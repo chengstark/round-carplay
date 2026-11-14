@@ -6,14 +6,17 @@ import json
 import os
 from pathlib import Path
 import pwd
+import ssl
 import subprocess
 import sys
 import tempfile
 import time
+import urllib.request
 
 NETWORK_FILE = Path('/etc/round-carplay/network.json')
 USER_FILE = Path('/etc/round-carplay/pi-user')
 INTERFACE = 'wlan0'
+PENDING_RESTART = Path('/run/round-carplay-network-restart-pending')
 
 
 def run(*args, input=None, timeout=40):
@@ -90,6 +93,15 @@ def snapshot(scan=True):
             'ipAddresses': addresses()}
 
 
+def carplay_active():
+    try:
+        with urllib.request.urlopen('https://127.0.0.1:8080/api/status', timeout=2,
+                                    context=ssl._create_unverified_context()) as response:
+            return json.load(response).get('sessionActive') is True
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
 def sync_network(restart=True):
     uuid = active_uuid()
     if not uuid:
@@ -130,7 +142,13 @@ def sync_network(restart=True):
         os.chown(temporary, 0, account.pw_gid)
         os.replace(temporary, NETWORK_FILE)
         if restart:
-            run('systemctl', '--no-block', 'try-restart', 'round-carplay-playport.service', timeout=10)
+            PENDING_RESTART.touch(mode=0o600, exist_ok=True)
+    # The recovery timer also runs during active CarPlay. Restarting PlayPort
+    # here kills its AirPlay streams even if only Wi-Fi metadata changed.
+    # Keep the pending marker and let the next timer tick restart when idle.
+    if restart and PENDING_RESTART.exists() and not carplay_active():
+        run('systemctl', '--no-block', 'try-restart', 'round-carplay-playport.service', timeout=10)
+        PENDING_RESTART.unlink(missing_ok=True)
     return changed
 
 

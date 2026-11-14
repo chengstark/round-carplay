@@ -10,9 +10,10 @@ distribution; the Pi runs them directly. There is no prebuilt OS image yet.
 - Target: Raspberry Pi OS **Trixie, 64-bit**, on the Pi 3 B; SSH and Wi-Fi enabled.
 - Initial installation needs internet for Debian runtime packages. Boot and
   operation afterwards use local services and the configured Wi-Fi network.
-- Physical Pi validation is pending. Packaging and local smoke checks do not
-  establish video decode performance, Bluetooth compatibility, touch accuracy,
-  audio routing, camera operation, OCR speed, or cold-boot reliability.
+- On the current Pi 3 B, a fresh iPhone pairing reached an active CarPlay video
+  session and survived two network recovery timer cycles. A second Pi and cold
+  boot/reconnect have not yet been validated. Touch, audio, camera and OCR still
+  need separate physical acceptance checks.
 - Pi 3 B has 1 GB RAM. Initial JVM/Node heap limits are 256/128 MB; Chromium,
   native allocations and the OS use additional RAM. These are starting budgets.
 - Current negotiation stays **512×512 map, 1024×1024 main, H.264, 60 fps**.
@@ -65,23 +66,31 @@ bash round-carplay-pi/deploy/install.sh
 ```
 
 The installer verifies checksums, rejects a 32-bit or non-Trixie OS, installs
-runtime packages, compiles the native BlueZ bridge on ARM64, and configures the
-three services. It asks for the Wi-Fi name/password and the phone's Bluetooth
-address; input is saved privately with mode 0600. The Mac's DHCP IP and VM SSH
-address are never copied into the launcher. The Pi resolves its LAN IP at boot.
+runtime packages, compiles the native BlueZ bridge on ARM64, and configures
+PlayPort, the dashboard, the kiosk and network recovery. It asks for the Wi-Fi
+name/password and the phone's Bluetooth address; input is saved privately with
+mode 0600. The Mac's DHCP IP and VM SSH address are never copied into the
+launcher. The Pi resolves its LAN IP at boot.
 
-Pairing on another computer does not pair the phone to the Pi. The current
-Linux bridge owns the complete first-pair flow: it advertises the accessory
-iAP and CarPlay discovery profiles, opens a five-minute setup window when the
-configured phone is not bonded, automatically confirms the Pi side of numeric
-comparison, trusts the completed bond, and closes the setup window.
+Pairing on another computer does not pair the phone to the Pi. The package
+overlays four adapted Rust modules from `experiments/native-inbound` onto the
+pinned PlayPort PR #4 bridge. This registers local accessory SDP/RFCOMM
+services for the iPhone's initial connection. The dashboard's **Pair iPhone**
+button opens a time-limited pairing window; the iPhone initiates the Bluetooth
+connection. On the iPhone, select **PlayPort** in Settings → Bluetooth or
+Settings → General → CarPlay → Available Cars, then approve the matching code
+and CarPlay prompt. Pairing progress and the code appear in dashboard Settings.
+For an incomplete saved bond, **Finish pairing** opens the window again without
+deleting keys. **Connect iPhone** reuses a completed bond. Only a live
+`/api/status.sessionActive=true` and video stream confirm CarPlay, not a
+Bluetooth “Connected” label. The first clean pairing worked on the current Pi;
+test the same procedure on every new Pi before calling its installation ready.
 
-On the iPhone, open **Settings → General → CarPlay → Available Cars**, select
-**PlayPort**, and approve the one iOS pairing/CarPlay prompt. Do not coordinate
-a code in a terminal. The stored BlueZ bond survives dashboard updates and all
-later boots reconnect automatically. If the setup window expires, restart only
-`round-carplay-playport.service` to open another window; a full Pi reboot is not
-required.
+The tested bridge, phone worker and network timer fix must be committed before
+the GitHub build can reproduce them. A local private package built from this
+working tree can include uncommitted code, but the published update channel
+contains only committed source. Private accessory identity must be supplied
+securely for each initial install; it is never included in public updates.
 
 If installation preceded pairing and you need to change the address/settings:
 

@@ -33,7 +33,7 @@ class LaunchTests(unittest.TestCase):
         (self.root / 'current/playport').mkdir(parents=True)
         with patch('sys.argv', ['launch.py', 'host']), patch.object(launch, 'lan_address', return_value='192.168.2.9'), \
              patch.object(launch, 'wifi_channel', return_value='6'), patch.object(launch.os, 'chdir'), \
-             patch.object(launch.os, 'execvpe') as execute, patch.dict(os.environ, {}, clear=True):
+             patch.object(launch.os, 'execvpe') as execute, patch.object(launch.subprocess, 'Popen'), patch.dict(os.environ, {}, clear=True):
             launch.main()
         command, argv, env = execute.call_args.args
         self.assertTrue(command.endswith('/playport/bin/server'))
@@ -41,6 +41,7 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(argv[argv.index('--main-render-scale') + 1], '200')
         self.assertEqual(argv[argv.index('--bind') + 1], '192.168.2.9')
         self.assertEqual(env['PLAYPORT_WIFI_PASSPHRASE'], 'private-test-secret')
+        self.assertEqual(env['PLAYPORT_OUTBOUND_HOLD_FILE'], str(self.root / 'state/phone-connect-hold'))
         self.assertNotIn('private-test-secret', argv)
         self.assertIn('-Xmx256m', env['JAVA_OPTS'])
         state = self.root / 'state/playport/config.json'

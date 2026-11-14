@@ -40,6 +40,16 @@ export default function SystemMenu({ gpsSmoothing, onGpsSmoothingChange, onClose
   const [update, setUpdate] = useState<SystemUpdateStatus>({ state: 'idle', message: 'Your dashboard software' })
   const [confirmReboot, setConfirmReboot] = useState(false)
   const [rebooting, setRebooting] = useState(false)
+  const [phone, setPhone] = useState<{ state: string; message: string; code?: string } | null>(null)
+  useEffect(() => {
+    let active = true
+    const poll = () => { void fetch('/api/phone').then(r => r.json()).then(value => {
+      if (active && typeof value.state === 'string') setPhone(value)
+    }).catch(() => undefined) }
+    poll()
+    const timer = window.setInterval(poll, 2000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [])
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
@@ -135,6 +145,22 @@ export default function SystemMenu({ gpsSmoothing, onGpsSmoothingChange, onClose
       <div className={`settings-body ${page === 'home' ? 'settings-home' : ''}`} key={page + (selected?.ssid || '')} tabIndex={-1}>
         {page === 'home' && <>
           <BrightnessControls />
+          {phone && <div className="settings-note" role="status">
+            <strong>CarPlay phone</strong><p>{phone.message}</p>
+            {phone.code && <p style={{ fontSize: 28, letterSpacing: 4 }}>{phone.code}</p>}
+            {phone.state === 'paired' && <p>Your saved Bluetooth pairing will be reused.</p>}
+            <button className="settings-action settings-primary" type="button" disabled={phone.state === 'pairing' || phone.state === 'connecting'}
+              onClick={() => {
+                setPhone(phone.state === 'paired'
+                  ? { state: 'connecting', message: 'Connecting using your saved Bluetooth pairing…' }
+                  : { state: 'pairing', message: 'Select PlayPort in iPhone Bluetooth settings and approve the code.' })
+                void fetch('/api/phone', { method: 'POST' }).then(response => {
+                  if (!response.ok) throw new Error('Phone connection service is unavailable')
+                }).catch(error => setPhone({ state: 'error', message: errorText(error) }))
+              }}>
+              {phone.state === 'connecting' ? 'Connecting…' : phone.state === 'pairing' ? 'Pairing…' : phone.state === 'paired' ? 'Connect iPhone' : phone.state === 'enrolling' ? 'Finish pairing' : 'Pair iPhone'}
+            </button>
+          </div>}
           <nav className="settings-categories" aria-label="Settings sections">
             {([
               { id: 'wifi', label: 'Wi-Fi', detail: 'Network connection', icon: 'wifi' },

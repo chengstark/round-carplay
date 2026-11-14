@@ -29,7 +29,9 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libbluetooth-dev
+          sudo apt-get install -y libbluetooth-dev libdbus-1-dev pkg-config cargo
+          rustup toolchain install stable --profile minimal
+          rustup default stable
           npm ci --ignore-scripts --legacy-peer-deps --no-audit
       - name: Verify dashboard and maintenance logic
         run: |
@@ -49,8 +51,14 @@ jobs:
               tar.extractall('dist/playport-source', filter='data')
           PY
           cd dist/playport-source
+          cp -R ../../vendor/playport-linux-pr4/bt-bridge/. linux/bt-bridge/
+          cp ../../deploy/pi/experiments/native-inbound/{bridge,pairing,main,cli}.rs linux/bt-bridge/src/
+          for source_patch in ../../deploy/pi/playport-patches/*.patch; do
+            patch -p1 < "$source_patch"
+          done
           bash gradlew --no-daemon :protocol:test :server:test :server:installDist
           bash linux/bt-bridge/build.sh
+          cd linux/bt-bridge && cargo test --locked
       - name: Package and sign the ARM64 update
         env:
           PI_UPDATE_SIGNING_KEY: ${{ secrets.PI_UPDATE_SIGNING_KEY }}

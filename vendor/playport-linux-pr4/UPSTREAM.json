@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/mvmcjr/playport",
+  "pullRequest": "https://github.com/youcci/playport/pull/4",
+  "revision": "997df2edfa3caf48198231db2ea4c16e21c54876",
+  "note": "Unmodified Linux bridge source from PR #4; GPL-3.0, see LICENSE."
+}
